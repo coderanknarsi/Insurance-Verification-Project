@@ -1,6 +1,7 @@
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Features from './components/Features';
+import ROI from './components/ROI';
 import Philosophy from './components/Philosophy';
 import Protocol from './components/Protocol';
 import Pricing from './components/Pricing';
@@ -12,6 +13,7 @@ export default function App() {
       <Navbar />
       <Hero />
       <Features />
+      <ROI />
       <Philosophy />
       <Protocol />
       <Pricing />

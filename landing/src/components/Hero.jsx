@@ -87,10 +87,10 @@ export default function Hero() {
         {/* Headline */}
         <div ref={headlineRef} className="mb-8">
           <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold text-white leading-[0.95] tracking-tight">
-            Monitor your
+            Stop Losing Money on
           </h1>
           <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-serif italic text-accent leading-[1.1] mt-2">
-            Portfolio Risk.
+            Uninsured Collateral.
           </h1>
         </div>
 
@@ -99,9 +99,9 @@ export default function Hero() {
           ref={subRef}
           className="opacity-0 text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10 leading-relaxed"
         >
-          Auto Lien Tracker verifies borrower insurance in real time, detects
-          lapses before they cost you, and keeps your collateral protected —
-          automatically.
+          Automated insurance tracking for BHPH dealers, banks, and credit
+          unions. Verify borrower coverage in real time, detect lapses before
+          they cost you, and keep every vehicle protected — automatically.
         </p>
 
         {/* CTA */}

@@ -1,4 +1,4 @@
-import { Shield } from 'lucide-react';
+import { Shield, Lock, Server, BadgeCheck } from 'lucide-react';
 
 const footerLinks = [
   {
@@ -68,6 +68,36 @@ export default function Footer() {
                 </ul>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Trust Badges */}
+        <div className="border-t border-white/[0.06] pt-8 pb-8 mb-8">
+          <p className="text-xs font-mono uppercase tracking-widest text-white/20 text-center mb-6">
+            Enterprise-Grade Security
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
+            <div className="flex items-center gap-2 text-white/40">
+              <Lock className="w-5 h-5 text-accent/60" />
+              <div>
+                <p className="text-sm font-medium text-white/60">256-bit AES</p>
+                <p className="text-[10px] text-white/30">Encryption at Rest & Transit</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-white/40">
+              <Server className="w-5 h-5 text-accent/60" />
+              <div>
+                <p className="text-sm font-medium text-white/60">SOC 2 Type II</p>
+                <p className="text-[10px] text-white/30">Compliant Infrastructure</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-white/40">
+              <BadgeCheck className="w-5 h-5 text-accent/60" />
+              <div>
+                <p className="text-sm font-medium text-white/60">MeasureOne Certified</p>
+                <p className="text-[10px] text-white/30">Verified Data Partner</p>
+              </div>
+            </div>
           </div>
         </div>
 
