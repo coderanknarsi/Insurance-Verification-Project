@@ -1,0 +1,85 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper: Get the user's document from the users collection
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Helper: Check if user belongs to the given organization
+    function belongsToOrg(orgId) {
+      return request.auth != null && getUserDoc().data.organizationId == orgId;
+    }
+
+    // Helper: Check if user has a specific role within their org
+    function hasRole(role) {
+      return request.auth != null && getUserDoc().data.role == role;
+    }
+
+    // Helper: Check if user is admin of the given org
+    function isOrgAdmin(orgId) {
+      return belongsToOrg(orgId) && hasRole('ADMIN');
+    }
+
+    // Organizations: admins can read/write, others in org can read
+    match /organizations/{orgId} {
+      allow read: if belongsToOrg(orgId);
+      allow create: if request.auth != null;
+      allow update: if isOrgAdmin(orgId);
+      allow delete: if false;
+    }
+
+    // Users: org admins can manage, users can read their own org's users
+    match /users/{userId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == userId || belongsToOrg(resource.data.organizationId));
+      allow create: if request.auth != null;
+      allow update: if request.auth.uid == userId ||
+        isOrgAdmin(resource.data.organizationId);
+      allow delete: if isOrgAdmin(resource.data.organizationId);
+    }
+
+    // Borrowers: org members can read, admins/managers can write
+    match /borrowers/{borrowerId} {
+      allow read: if belongsToOrg(resource.data.organizationId);
+      allow create: if belongsToOrg(request.resource.data.organizationId) &&
+        (hasRole('ADMIN') || hasRole('MANAGER'));
+      allow update: if belongsToOrg(resource.data.organizationId) &&
+        (hasRole('ADMIN') || hasRole('MANAGER'));
+      allow delete: if isOrgAdmin(resource.data.organizationId);
+    }
+
+    // Vehicles: same as borrowers
+    match /vehicles/{vehicleId} {
+      allow read: if belongsToOrg(resource.data.organizationId);
+      allow create: if belongsToOrg(request.resource.data.organizationId) &&
+        (hasRole('ADMIN') || hasRole('MANAGER'));
+      allow update: if belongsToOrg(resource.data.organizationId) &&
+        (hasRole('ADMIN') || hasRole('MANAGER'));
+      allow delete: if isOrgAdmin(resource.data.organizationId);
+    }
+
+    // Policies: same as borrowers
+    match /policies/{policyId} {
+      allow read: if belongsToOrg(resource.data.organizationId);
+      allow create: if belongsToOrg(request.resource.data.organizationId) &&
+        (hasRole('ADMIN') || hasRole('MANAGER'));
+      allow update: if belongsToOrg(resource.data.organizationId) &&
+        (hasRole('ADMIN') || hasRole('MANAGER'));
+      allow delete: if false;
+    }
+
+    // Audit log: org members can read, no client writes (server only)
+    match /auditLog/{entryId} {
+      allow read: if belongsToOrg(resource.data.organizationId);
+      allow write: if false;
+    }
+
+    // Notifications: org members can read, no client writes (server only)
+    match /notifications/{notifId} {
+      allow read: if belongsToOrg(resource.data.organizationId);
+      allow write: if false;
+    }
+  }
+}

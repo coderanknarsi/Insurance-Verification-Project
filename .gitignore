@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+firestore-debug.log
+
+# Functions build output
+functions/lib/
+
+# Landing page build output
+landing/dist/
+
+# Environment files
+.env
+.env.local
+functions/.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
