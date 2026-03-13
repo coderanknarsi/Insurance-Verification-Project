@@ -9,3 +9,7 @@ export { sendVerificationLink } from "./functions/send-verification-link";
 
 // Phase 4: Webhook Listener & Status Monitoring
 export { measureOneWebhook } from "./functions/measure-one-webhook";
+
+// Phase 5: Audit Log & Compliance Rules
+export { getBorrowerAuditLog } from "./functions/get-borrower-audit-log";
+export { getComplianceRules, updateComplianceRules } from "./functions/compliance-rules";

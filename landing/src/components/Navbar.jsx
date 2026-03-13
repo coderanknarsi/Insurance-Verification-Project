@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Shield, Menu, X } from 'lucide-react';
 
+const DASHBOARD_BASE = import.meta.env.VITE_DASHBOARD_URL || 'https://app.autolientracker.com';
+const SIGNUP_URL = `${DASHBOARD_BASE}?mode=signup`;
+
 const navLinks = [
   { label: 'Features', href: '#features' },
   { label: 'How It Works', href: '#protocol' },
@@ -38,7 +41,7 @@ export default function Navbar() {
           />
           <span
             className={`font-semibold tracking-tight transition-all duration-500 ${
-              scrolled ? 'text-sm text-white' : 'text-base text-navy'
+              scrolled ? 'text-sm text-white' : 'text-base text-white'
             }`}
           >
             Auto Lien Tracker
@@ -52,14 +55,14 @@ export default function Navbar() {
               key={link.href}
               href={link.href}
               className={`text-sm font-medium transition-colors duration-200 hover:text-accent ${
-                scrolled ? 'text-white/70' : 'text-carbon/70'
+                scrolled ? 'text-white/70' : 'text-white/80'
               }`}
             >
               {link.label}
             </a>
           ))}
           <a
-            href="#pricing"
+            href={SIGNUP_URL}
             className={`btn-magnetic text-sm font-semibold px-5 py-2 rounded-full transition-all duration-300 ${
               scrolled
                 ? 'bg-accent text-white hover:bg-accent/90'
@@ -100,7 +103,7 @@ export default function Navbar() {
             </a>
           ))}
           <a
-            href="#pricing"
+            href={SIGNUP_URL}
             onClick={() => setMobileOpen(false)}
             className="text-sm font-semibold bg-accent text-white px-5 py-2 rounded-full text-center"
           >

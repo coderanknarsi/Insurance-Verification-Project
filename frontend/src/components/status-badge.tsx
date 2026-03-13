@@ -7,15 +7,15 @@ type Status = "GREEN" | "YELLOW" | "RED";
 const statusConfig: Record<Status, { label: string; className: string }> = {
   GREEN: {
     label: "Compliant",
-    className: "border-green-600 bg-green-50 text-green-700",
+    className: "border-green-500/30 bg-green-500/10 text-green-400",
   },
   YELLOW: {
     label: "At Risk",
-    className: "border-yellow-500 bg-yellow-50 text-yellow-700",
+    className: "border-yellow-500/30 bg-yellow-500/10 text-yellow-400",
   },
   RED: {
     label: "Non-Compliant",
-    className: "border-red-600 bg-red-50 text-red-700",
+    className: "border-red-500/30 bg-red-500/10 text-red-400",
   },
 };
 
@@ -41,15 +41,15 @@ interface StatusDotProps {
 }
 
 const dotColors: Record<Status, string> = {
-  GREEN: "bg-green-500",
-  YELLOW: "bg-yellow-400",
-  RED: "bg-red-500",
+  GREEN: "bg-green-400 text-green-400",
+  YELLOW: "bg-yellow-400 text-yellow-400",
+  RED: "bg-red-400 text-red-400",
 };
 
 export function StatusDot({ status }: StatusDotProps) {
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 rounded-full ${dotColors[status]}`}
+      className={`inline-block h-2.5 w-2.5 rounded-full pulse-glow ${dotColors[status]}`}
       title={statusConfig[status].label}
     />
   );

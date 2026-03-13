@@ -82,14 +82,14 @@ export function SendVerificationDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : handleClose())}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="border-border-subtle text-carbon-light hover:text-offwhite hover:bg-surface">
           Send Link
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="bg-card-bg border-border-subtle text-offwhite">
         <DialogHeader>
-          <DialogTitle>Send Verification Link</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-offwhite">Send Verification Link</DialogTitle>
+          <DialogDescription className="text-carbon-light">
             Send an insurance verification link to {borrowerName} for their {vehicleLabel}.
           </DialogDescription>
         </DialogHeader>
@@ -97,69 +97,67 @@ export function SendVerificationDialog({
         {!result ? (
           <div className="space-y-4">
             <div>
-              <Label>Send via</Label>
+              <Label className="text-carbon-light">Send via</Label>
               <div className="mt-2 flex gap-2">
-                <Button
-                  variant={channel === "EMAIL" ? "default" : "outline"}
-                  size="sm"
+                <button
                   onClick={() => setChannel("EMAIL")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${channel === "EMAIL" ? "bg-accent/15 text-accent" : "bg-surface text-carbon-light hover:text-offwhite"}`}
                 >
                   Email
-                </Button>
-                <Button
-                  variant={channel === "SMS" ? "default" : "outline"}
-                  size="sm"
+                </button>
+                <button
                   onClick={() => setChannel("SMS")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${channel === "SMS" ? "bg-accent/15 text-accent" : "bg-surface text-carbon-light hover:text-offwhite"}`}
                 >
                   SMS
-                </Button>
+                </button>
               </div>
             </div>
 
             <div>
-              <Label>Recipient</Label>
+              <Label className="text-carbon-light">Recipient</Label>
               <Input
                 value={channel === "EMAIL" ? borrowerEmail : borrowerPhone}
                 disabled
-                className="mt-1"
+                className="mt-1 bg-surface border-border-subtle text-offwhite"
               />
             </div>
 
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-400">{error}</p>
             )}
 
-            <Button onClick={handleSend} disabled={loading} className="w-full">
+            <Button onClick={handleSend} disabled={loading} className="w-full bg-accent hover:bg-accent-hover text-white">
               {loading ? "Generating link..." : "Generate & Log Verification Link"}
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-md bg-green-50 p-3">
+            <div className="rounded-md bg-green-500/10 border border-green-500/20 p-3">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="border-green-600 text-green-600">
+                <Badge variant="outline" className="border-green-500/30 text-green-400">
                   Link Generated
                 </Badge>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-carbon-light">
                   Notification logged for {result.recipient}
                 </span>
               </div>
             </div>
 
             <div>
-              <Label>Verification Link</Label>
+              <Label className="text-carbon-light">Verification Link</Label>
               <div className="mt-1 flex gap-2">
-                <Input value={result.invitationUrl} readOnly className="font-mono text-xs" />
-                <Button variant="outline" size="sm" onClick={handleCopy}>
+                <Input value={result.invitationUrl} readOnly className="font-mono text-xs bg-surface border-border-subtle text-offwhite" />
+                <Button variant="outline" size="sm" onClick={handleCopy} className="border-border-subtle text-carbon-light hover:text-offwhite hover:bg-surface">
                   {copied ? "Copied!" : "Copy"}
                 </Button>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-carbon-light">
                 Share this link with the borrower to verify their insurance.
               </p>
             </div>
 
-            <Button variant="outline" onClick={handleClose} className="w-full">
+            <Button variant="outline" onClick={handleClose} className="w-full border-border-subtle text-carbon-light hover:text-offwhite hover:bg-surface">
               Done
             </Button>
           </div>

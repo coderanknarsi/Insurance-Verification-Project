@@ -13,8 +13,7 @@ const footerLinks = [
     heading: 'Company',
     links: [
       { label: 'About', href: '#' },
-      { label: 'Contact', href: 'mailto:hello@autolientracker.com' },
-      { label: 'Careers', href: '#' },
+      { label: 'Contact', href: '#contact' },
     ],
   },
   {

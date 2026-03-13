@@ -127,10 +127,15 @@ export const getDashboardSummary = onCall(async (request) => {
       .get(),
   ]);
 
+  const green = greenSnap.data().count;
+  const yellow = yellowSnap.data().count;
+  const red = redSnap.data().count;
+
   return {
-    green: greenSnap.data().count,
-    yellow: yellowSnap.data().count,
-    red: redSnap.data().count,
+    green,
+    yellow,
+    red,
+    actionRequired: yellow + red,
     totalBorrowers: totalBorrowersSnap.data().count,
   };
 });

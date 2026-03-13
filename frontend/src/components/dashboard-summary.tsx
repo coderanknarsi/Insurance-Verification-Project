@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ShieldCheck, AlertTriangle, ShieldX, Bell } from "lucide-react";
 import { callGetDashboardSummary } from "@/lib/api";
 
 interface DashboardSummaryProps {
@@ -12,6 +12,7 @@ interface Summary {
   green: number;
   yellow: number;
   red: number;
+  actionRequired: number;
   totalBorrowers: number;
 }
 
@@ -46,79 +47,142 @@ export function DashboardSummary({ organizationId }: DashboardSummaryProps) {
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i}>
-            <CardHeader>
-              <CardTitle className="text-muted-foreground text-sm">Loading...</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-muted-foreground">—</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="space-y-4">
+        <div className="bg-card-bg border border-border-subtle rounded-xl p-4 animate-pulse">
+          <div className="h-4 bg-surface rounded w-48" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-card-bg border border-border-subtle rounded-xl p-5 animate-pulse">
+              <div className="h-4 bg-surface rounded w-20 mb-3" />
+              <div className="h-8 bg-surface rounded w-12" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="py-4">
-          <p className="text-sm text-red-600">{error}</p>
-        </CardContent>
-      </Card>
+      <div className="bg-card-bg border border-red-500/20 rounded-xl p-4">
+        <p className="text-sm text-red-400">{error}</p>
+      </div>
     );
   }
 
   if (!summary) return null;
+
+  const total = summary.green + summary.yellow + summary.red || 1;
 
   const cards = [
     {
       title: "Compliant",
       count: summary.green,
       subtitle: "Active & verified",
-      color: "text-green-600",
-      bgColor: "border-green-200 bg-green-50/50",
+      icon: ShieldCheck,
+      accent: "#22C55E",
+      bgAccent: "rgba(34, 197, 94, 0.08)",
+      borderAccent: "rgba(34, 197, 94, 0.2)",
+      pct: Math.round((summary.green / total) * 100),
     },
     {
       title: "At Risk",
       count: summary.yellow,
       subtitle: "Expiring soon",
-      color: "text-yellow-600",
-      bgColor: "border-yellow-200 bg-yellow-50/50",
+      icon: AlertTriangle,
+      accent: "#EAB308",
+      bgAccent: "rgba(234, 179, 8, 0.08)",
+      borderAccent: "rgba(234, 179, 8, 0.2)",
+      pct: Math.round((summary.yellow / total) * 100),
     },
     {
       title: "Non-Compliant",
       count: summary.red,
       subtitle: "Lapsed or unverified",
-      color: "text-red-600",
-      bgColor: "border-red-200 bg-red-50/50",
-    },
-    {
-      title: "Total Borrowers",
-      count: summary.totalBorrowers,
-      subtitle: "All monitored",
-      color: "text-foreground",
-      bgColor: "",
+      icon: ShieldX,
+      accent: "#EF4444",
+      bgAccent: "rgba(239, 68, 68, 0.08)",
+      borderAccent: "rgba(239, 68, 68, 0.2)",
+      pct: Math.round((summary.red / total) * 100),
     },
   ];
 
+  const actionPct = Math.round(
+    ((summary.actionRequired) / (summary.totalBorrowers || 1)) * 100
+  );
+
   return (
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="space-y-4">
+      {/* Action Required Banner */}
+      <div
+        className="relative overflow-hidden bg-card-bg border rounded-xl px-5 py-3.5 flex items-center justify-between"
+        style={{ borderColor: "rgba(249, 115, 22, 0.25)" }}
+      >
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{ background: "linear-gradient(90deg, #F97316 0%, transparent 60%)" }}
+        />
+        <div className="relative flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: "rgba(249, 115, 22, 0.1)" }}>
+            <Bell className="w-4.5 h-4.5 text-orange-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-offwhite">
+              <span className="text-orange-400">{summary.actionRequired}</span>{" "}
+              borrower{summary.actionRequired !== 1 ? "s" : ""} need attention
+            </p>
+            <p className="text-[11px] text-carbon-light">
+              {actionPct}% of {summary.totalBorrowers} monitored
+            </p>
+          </div>
+        </div>
+        {/* Mini progress */}
+        <div className="relative flex items-center gap-3">
+          <div className="w-32 h-1.5 bg-surface rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${actionPct}%`, backgroundColor: "#F97316" }}
+            />
+          </div>
+          <span className="text-xs font-mono text-orange-400">{actionPct}%</span>
+        </div>
+      </div>
+
+      {/* Stoplight Cards — 3 columns */}
+      <div className="grid gap-4 md:grid-cols-3">
       {cards.map((card) => (
-        <Card key={card.title} className={card.bgColor}>
-          <CardHeader className="pb-2">
-            <CardTitle className={`text-sm font-medium ${card.color}`}>
+        <div
+          key={card.title}
+          className="bg-card-bg border rounded-xl p-5 transition-all duration-200 hover:translate-y-[-1px] hover:shadow-lg hover:shadow-black/20"
+          style={{ borderColor: card.borderAccent }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-medium uppercase tracking-wider" style={{ color: card.accent }}>
               {card.title}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-3xl font-bold ${card.color}`}>{card.count}</p>
-            <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
-          </CardContent>
-        </Card>
+            </span>
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: card.bgAccent }}
+            >
+              <card.icon className="w-4 h-4" style={{ color: card.accent }} />
+            </div>
+          </div>
+          <p className="text-3xl font-bold text-offwhite mb-1">{card.count}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-carbon-light">{card.subtitle}</p>
+            <span className="text-xs font-mono" style={{ color: card.accent }}>{card.pct}%</span>
+          </div>
+          {/* Progress bar */}
+          <div className="mt-3 h-1 bg-surface rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${card.pct}%`, backgroundColor: card.accent }}
+            />
+          </div>
+        </div>
       ))}
+      </div>
     </div>
   );
 }

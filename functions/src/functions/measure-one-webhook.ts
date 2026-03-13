@@ -7,6 +7,7 @@ import { measureOneClient } from "../services/measureone";
 import {
   parseInsuranceRecord,
   computeDashboardStatus,
+  computeComplianceIssues,
 } from "../services/insurance-parser";
 import { PolicyStatus, DashboardStatus } from "../types/policy";
 import { AuditAction, AuditEntityType } from "../types/audit";
@@ -98,10 +99,24 @@ export const measureOneWebhook = onRequest(async (req, res) => {
 
     // Parse the first insurance record
     const parsed = parseInsuranceRecord(details.records[0]);
+
+    // Fetch org compliance rules if available
+    let complianceRules;
+    try {
+      const orgDoc = await collections.organizations
+        .doc(policy.organizationId)
+        .get();
+      complianceRules = orgDoc.data()?.settings?.complianceRules;
+    } catch {
+      // Continue without rules — will use defaults
+    }
+
+    const complianceIssues = computeComplianceIssues(parsed, complianceRules);
     const dashboardStatus = computeDashboardStatus(
       parsed.status,
       parsed.isLienholderListed,
-      parsed.coveragePeriod
+      parsed.coveragePeriod,
+      complianceIssues
     );
 
     const previousValue = {
@@ -109,15 +124,25 @@ export const measureOneWebhook = onRequest(async (req, res) => {
       dashboardStatus: policy.dashboardStatus,
     };
 
-    // Update policy with parsed insurance data
+    // Update policy with all enriched insurance data
     await collections.policies.doc(policyDoc.id).update({
       status: parsed.status,
       policyNumber: parsed.policyNumber ?? null,
       policyTypes: parsed.policyTypes,
       coveragePeriod: parsed.coveragePeriod ?? null,
       coverages: parsed.coverages,
+      coverageItems: parsed.coverageItems,
+      interestedParties: parsed.interestedParties,
       isLienholderListed: parsed.isLienholderListed,
       insuranceProvider: parsed.insuranceProvider ?? null,
+      insuranceProviderDetail: parsed.insuranceProviderDetail ?? null,
+      cancelledDate: parsed.cancelledDate ?? null,
+      pendingCancelDate: parsed.pendingCancelDate ?? null,
+      premiumAmount: parsed.premiumAmount ?? null,
+      paymentFrequency: parsed.paymentFrequency ?? null,
+      drivers: parsed.drivers,
+      vehicleRemovedFromPolicy: parsed.vehicleRemovedFromPolicy,
+      complianceIssues,
       dashboardStatus,
       lastVerifiedAt: now,
       updatedAt: now,

@@ -18,10 +18,23 @@ export enum SubscriptionTier {
   ENTERPRISE = "ENTERPRISE",
 }
 
+export interface ComplianceRules {
+  requireLienholder: boolean;
+  requireComprehensive: boolean;
+  requireCollision: boolean;
+  maxCompDeductible?: number;
+  maxCollisionDeductible?: number;
+  expirationWarningDays: number;
+  lapseGracePeriodDays: number;
+  autoSendReminder: boolean;
+  reminderDaysBeforeExpiry: number;
+}
+
 export interface OrganizationSettings {
   notificationPreference: NotificationPreference;
   lapseGracePeriodDays: number;
   expirationWarningDays: number;
+  complianceRules?: ComplianceRules;
 }
 
 export interface OrganizationSubscription {

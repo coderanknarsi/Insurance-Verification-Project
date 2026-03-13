@@ -5,6 +5,9 @@ import { Check, Calculator } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
+const DASHBOARD_BASE = import.meta.env.VITE_DASHBOARD_URL || 'https://app.autolientracker.com';
+const SIGNUP_URL = `${DASHBOARD_BASE}?mode=signup`;
+
 const tiers = [
   { min: 0, max: 100, perVehicle: 3.49, label: 'Starter' },
   { min: 101, max: 500, perVehicle: 2.99, label: 'Growth' },
@@ -199,7 +202,7 @@ export default function Pricing() {
             {/* CTA */}
             <div className="mt-10 text-center">
               <a
-                href="mailto:hello@autolientracker.com?subject=Free%20Pilot%20Request"
+                href={SIGNUP_URL}
                 className="btn-magnetic inline-block relative bg-accent text-white font-semibold text-lg px-10 py-4 rounded-full shadow-lg shadow-accent/30 hover:shadow-xl hover:shadow-accent/40 transition-shadow"
               >
                 <span className="btn-bg bg-white/20 rounded-full" />

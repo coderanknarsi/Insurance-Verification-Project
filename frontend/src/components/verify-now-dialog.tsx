@@ -64,12 +64,12 @@ export function VerifyNowDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? handleOpen() : handleClose())}>
       <DialogTrigger asChild>
-        <Button size="sm">Verify Now</Button>
+        <Button size="sm" className="bg-accent hover:bg-accent-hover text-white">Verify Now</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl bg-card-bg border-border-subtle text-offwhite">
         <DialogHeader>
-          <DialogTitle>Insurance Verification</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-offwhite">Insurance Verification</DialogTitle>
+          <DialogDescription className="text-carbon-light">
             Verify insurance for {borrowerName} — {vehicleLabel}
           </DialogDescription>
         </DialogHeader>
@@ -77,14 +77,17 @@ export function VerifyNowDialog({
         <div className="min-h-[400px]">
           {state === "loading" && (
             <div className="flex h-[400px] items-center justify-center">
-              <p className="text-muted-foreground">Preparing verification...</p>
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <p className="text-carbon-light">Preparing verification...</p>
+              </div>
             </div>
           )}
 
           {state === "error" && (
             <div className="flex h-[400px] flex-col items-center justify-center gap-4">
-              <p className="text-red-600">{error}</p>
-              <Button variant="outline" onClick={handleOpen}>
+              <p className="text-red-400">{error}</p>
+              <Button variant="outline" onClick={handleOpen} className="border-border-subtle text-carbon-light hover:text-offwhite hover:bg-surface">
                 Retry
               </Button>
             </div>
@@ -92,10 +95,10 @@ export function VerifyNowDialog({
 
           {state === "ready" && invitationUrl && (
             <div className="space-y-4">
-              <div className="rounded-md border bg-muted/50 p-4">
+              <div className="rounded-md border border-border-subtle bg-surface p-4">
                 <div className="mb-3 flex items-center gap-2">
-                  <Badge variant="outline">MeasureOne</Badge>
-                  <span className="text-sm text-muted-foreground">
+                  <Badge variant="outline" className="border-accent/30 text-accent">MeasureOne</Badge>
+                  <span className="text-sm text-carbon-light">
                     Hand the device to the borrower to complete verification
                   </span>
                 </div>
@@ -115,13 +118,13 @@ export function VerifyNowDialog({
                 */}
                 <iframe
                   src={invitationUrl}
-                  className="h-[500px] w-full rounded-md border"
+                  className="h-[500px] w-full rounded-md border border-border-subtle"
                   title="MeasureOne Insurance Verification"
                   sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
                 />
               </div>
 
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-carbon-light">
                 The borrower should log into their insurance provider above. Once complete,
                 the policy status will update automatically within a few minutes.
               </p>
@@ -130,11 +133,11 @@ export function VerifyNowDialog({
 
           {state === "completed" && (
             <div className="flex h-[400px] flex-col items-center justify-center gap-4">
-              <Badge className="bg-green-600">Verification Complete</Badge>
-              <p className="text-muted-foreground">
+              <Badge className="bg-green-500/15 text-green-400 border border-green-500/30">Verification Complete</Badge>
+              <p className="text-carbon-light">
                 Insurance details have been submitted. Status will update shortly.
               </p>
-              <Button variant="outline" onClick={handleClose}>
+              <Button variant="outline" onClick={handleClose} className="border-border-subtle text-carbon-light hover:text-offwhite hover:bg-surface">
                 Close
               </Button>
             </div>
