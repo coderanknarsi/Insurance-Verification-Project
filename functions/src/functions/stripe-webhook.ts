@@ -29,7 +29,7 @@ export const stripeWebhook = onRequest(
       event = stripe.webhooks.constructEvent(
         req.rawBody,
         sig,
-        stripeWebhookSecret.value()
+        stripeWebhookSecret.value().trim()
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -51,7 +51,8 @@ export const stripeWebhook = onRequest(
           await handleSubscriptionDeleted(subscription);
           break;
         }
-        case "invoice.paid": {
+        case "invoice.paid":
+        case "invoice.payment_succeeded": {
           const invoice = event.data.object as Stripe.Invoice;
           await handleInvoicePaid(invoice);
           break;
@@ -74,13 +75,17 @@ export const stripeWebhook = onRequest(
 );
 
 async function findOrgByCustomerId(customerId: string): Promise<string | null> {
-  const snapshot = await collections.organizations
-    .where("stripe.stripeCustomerId", "==", customerId)
-    .limit(1)
-    .get();
+  try {
+    const snapshot = await collections.organizations
+      .where("stripe.stripeCustomerId", "==", customerId)
+      .limit(1)
+      .get();
 
-  if (snapshot.empty) return null;
-  return snapshot.docs[0].id;
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].id;
+  } catch {
+    return null;
+  }
 }
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
@@ -94,7 +99,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     (await findOrgByCustomerId(customerId));
 
   if (!orgId) {
-    console.error("No organization found for customer:", customerId);
+    console.log("No organization found for customer:", customerId, "(skipping)");
     return;
   }
 
@@ -129,7 +134,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     (await findOrgByCustomerId(customerId));
 
   if (!orgId) {
-    console.error("No organization found for customer:", customerId);
+    console.log("No organization found for customer:", customerId, "(skipping)");
     return;
   }
 
