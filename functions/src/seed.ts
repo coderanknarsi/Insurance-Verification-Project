@@ -44,6 +44,13 @@ async function seed() {
       perBorrowerRate: 3.0,
       activeMonitoredCount: 0,
     },
+    stripe: {
+      stripeCustomerId: "",
+      plan: "STARTER",
+      status: "trialing",
+      trialEnd: Math.floor(Date.now() / 1000) + 14 * 86400,
+      cancelAtPeriodEnd: false,
+    },
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   });

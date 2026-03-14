@@ -13,3 +13,14 @@ export { measureOneWebhook } from "./functions/measure-one-webhook";
 // Phase 5: Audit Log & Compliance Rules
 export { getBorrowerAuditLog } from "./functions/get-borrower-audit-log";
 export { getComplianceRules, updateComplianceRules } from "./functions/compliance-rules";
+
+// Phase 6: Stripe Billing
+export {
+  createSubscription,
+  getSubscriptionStatus,
+  changePlan,
+  cancelSubscription,
+  resumeSubscription,
+  createBillingPortalSession,
+} from "./functions/stripe-billing";
+export { stripeWebhook } from "./functions/stripe-webhook";

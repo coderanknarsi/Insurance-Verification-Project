@@ -98,22 +98,22 @@ export default function ROI() {
               <div className="space-y-5">
                 <div>
                   <p className="text-xs text-white/40 font-mono uppercase tracking-wider mb-1">
-                    200 vehicles for one year
+                    Growth plan — up to 150 vehicles
                   </p>
                   <p className="text-4xl md:text-5xl font-extrabold text-accent">
-                    $7,164
+                    $4,188
                     <span className="text-lg text-accent/50 ml-1">/year</span>
                   </p>
                 </div>
 
                 <div className="border-t border-accent/10 pt-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-white/40">Platform base</span>
-                    <span className="text-white/60 font-mono">$149/mo × 12</span>
+                    <span className="text-white/40">Flat monthly rate</span>
+                    <span className="text-white/60 font-mono">$349/mo × 12</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-white/40">Per-vehicle monitoring</span>
-                    <span className="text-white/60 font-mono">$2.49/mo × 200</span>
+                    <span className="text-white/40">Per-vehicle fees</span>
+                    <span className="text-accent font-mono">$0</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-white/40">Lapse detection speed</span>
@@ -129,7 +129,7 @@ export default function ROI() {
             <DollarSign className="w-8 h-8 text-green-400 flex-shrink-0" />
             <p className="text-white/70 text-base md:text-lg">
               Catching <span className="text-white font-semibold">just one</span> lapsed policy before a total loss{' '}
-              <span className="text-green-400 font-semibold">saves more than 2× your annual cost.</span>
+              <span className="text-green-400 font-semibold">saves more than 3× your annual cost.</span>
             </p>
           </div>
         </div>

@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Settings,
+  CreditCard,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -21,6 +22,7 @@ interface SidebarProps {
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "verifications", label: "Verifications", icon: ShieldCheck },
+  { id: "billing", label: "Billing", icon: CreditCard },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 

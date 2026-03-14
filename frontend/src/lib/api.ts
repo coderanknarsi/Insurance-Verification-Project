@@ -231,3 +231,77 @@ export function callUpdateComplianceRules(data: {
     "updateComplianceRules"
   )(data);
 }
+
+// ---- Stripe Billing ----
+
+export interface SubscriptionStatus {
+  hasSubscription: boolean;
+  plan: string | null;
+  planName: string | null;
+  priceMonthly: number | null;
+  status: string | null;
+  currentPeriodEnd: number | null;
+  trialEnd: number | null;
+  trialDaysRemaining: number | null;
+  cancelAtPeriodEnd: boolean;
+  maxVehicles: number;
+  activeVehicles: number;
+}
+
+export interface CreateSubscriptionResult {
+  subscriptionId: string;
+  clientSecret: string | null;
+  status: string;
+  trialEnd: number | null;
+}
+
+export function callCreateSubscription(data: {
+  organizationId: string;
+  plan: string;
+}) {
+  return httpsCallable<typeof data, CreateSubscriptionResult>(
+    getClientFunctions(),
+    "createSubscription"
+  )(data);
+}
+
+export function callGetSubscriptionStatus(data: { organizationId: string }) {
+  return httpsCallable<typeof data, SubscriptionStatus>(
+    getClientFunctions(),
+    "getSubscriptionStatus"
+  )(data);
+}
+
+export function callChangePlan(data: {
+  organizationId: string;
+  newPlan: string;
+}) {
+  return httpsCallable<typeof data, { success: boolean; plan: string; status: string }>(
+    getClientFunctions(),
+    "changePlan"
+  )(data);
+}
+
+export function callCancelSubscription(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { success: boolean }>(
+    getClientFunctions(),
+    "cancelSubscription"
+  )(data);
+}
+
+export function callResumeSubscription(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { success: boolean }>(
+    getClientFunctions(),
+    "resumeSubscription"
+  )(data);
+}
+
+export function callCreateBillingPortalSession(data: {
+  organizationId: string;
+  returnUrl: string;
+}) {
+  return httpsCallable<typeof data, { url: string }>(
+    getClientFunctions(),
+    "createBillingPortalSession"
+  )(data);
+}

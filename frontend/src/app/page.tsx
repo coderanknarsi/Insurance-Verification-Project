@@ -21,6 +21,7 @@ import { DashboardWidgets } from "@/components/dashboard-widgets";
 import { BorrowerTable } from "@/components/borrower-table";
 import { BorrowerDetailPanel } from "@/components/borrower-detail-panel";
 import { ComplianceSettings } from "@/components/compliance-settings";
+import { BillingSettings } from "@/components/billing-settings";
 import type { BorrowerWithVehicles } from "@/lib/api";
 
 // TODO: Replace with actual org ID from authenticated user's profile
@@ -230,6 +231,7 @@ export default function Home() {
             <h1 className="text-lg font-semibold text-offwhite">
               {activeNav === "dashboard" && "Dashboard"}
               {activeNav === "verifications" && "Verifications"}
+              {activeNav === "billing" && "Billing"}
               {activeNav === "settings" && "Settings"}
             </h1>
             <p className="text-xs text-carbon-light">Portfolio monitoring & insurance verification</p>
@@ -254,6 +256,9 @@ export default function Home() {
                 onBorrowersLoaded={setAllBorrowers}
               />
             </>
+          )}
+          {activeNav === "billing" && (
+            <BillingSettings organizationId={DEMO_ORG_ID} />
           )}
           {activeNav === "settings" && (
             <ComplianceSettings organizationId={DEMO_ORG_ID} />

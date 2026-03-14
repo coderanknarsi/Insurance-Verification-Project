@@ -48,7 +48,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const err = await response.json();
-      console.error('Resend API error:', err);
+      console.error('Resend API error:', JSON.stringify(err));
       return res.status(502).json({ error: 'Failed to send email' });
     }
 

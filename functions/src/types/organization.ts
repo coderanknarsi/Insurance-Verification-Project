@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
+import type { StripeSubscriptionData } from "./subscription";
 
 export enum OrganizationType {
   BHPH_DEALER = "BHPH_DEALER",
@@ -55,6 +56,7 @@ export interface Organization {
   };
   settings: OrganizationSettings;
   subscription: OrganizationSubscription;
+  stripe?: StripeSubscriptionData;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
