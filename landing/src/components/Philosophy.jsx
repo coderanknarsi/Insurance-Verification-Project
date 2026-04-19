@@ -1,44 +1,82 @@
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import {
+  Upload,
+  ScanSearch,
+  Bell,
+  Users,
+  FileSpreadsheet,
+  ShieldCheck,
+  Mail,
+  Smartphone,
+} from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const manifesto = [
-  'We believe every auto loan deserves',
-  'continuous insurance verification —',
-  'not quarterly spot-checks.',
-  '',
-  'Auto Lien Tracker was built for dealers,',
-  'banks, and credit unions who refuse',
-  'to leave collateral unprotected.',
-  '',
-  'We replaced manual processes with',
-  'real-time automation. Because your',
-  'portfolio risk shouldn\'t depend on',
-  'a spreadsheet.',
+const capabilities = [
+  {
+    icon: Upload,
+    title: 'Bulk Import',
+    description: 'Upload your portfolio from a spreadsheet in one step.',
+  },
+  {
+    icon: ScanSearch,
+    title: 'Insurance Card OCR',
+    description: 'Borrowers snap a photo; we extract policy details automatically.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Direct Carrier Checks',
+    description: 'Verify coverage with Progressive, State Farm, Allstate, and National General.',
+  },
+  {
+    icon: Bell,
+    title: 'Lapse Alerts',
+    description: 'Automated weekly scans flag lapses before they become losses.',
+  },
+  {
+    icon: Mail,
+    title: 'Email & SMS Outreach',
+    description: 'Send borrowers a link to upload proof — no phone calls needed.',
+  },
+  {
+    icon: Smartphone,
+    title: 'Borrower Self-Service',
+    description: 'Mobile-friendly intake lets borrowers verify from any device.',
+  },
+  {
+    icon: Users,
+    title: 'Team Access',
+    description: 'Invite your team with role-based permissions and audit trails.',
+  },
+  {
+    icon: FileSpreadsheet,
+    title: 'Verification History',
+    description: 'Full compliance record for every borrower, exportable anytime.',
+  },
 ];
 
 export default function Philosophy() {
   const sectionRef = useRef(null);
-  const wordsRef = useRef([]);
+  const cardsRef = useRef([]);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      wordsRef.current.forEach((word) => {
-        if (!word) return;
+      cardsRef.current.forEach((card) => {
+        if (!card) return;
         gsap.fromTo(
-          word,
-          { opacity: 0.15 },
+          card,
+          { opacity: 0, y: 40 },
           {
             opacity: 1,
-            duration: 0.4,
-            ease: 'power2.out',
+            y: 0,
+            duration: 0.6,
+            ease: 'power3.out',
             scrollTrigger: {
-              trigger: word,
-              start: 'top 80%',
-              end: 'top 50%',
-              scrub: 1,
+              trigger: card,
+              start: 'top 85%',
+              once: true,
             },
           }
         );
@@ -48,53 +86,39 @@ export default function Philosophy() {
     return () => ctx.revert();
   }, []);
 
-  let wordIndex = 0;
-
   return (
     <section
       ref={sectionRef}
-      className="relative py-32 md:py-48 bg-navy overflow-hidden"
+      className="relative py-24 md:py-32 bg-navy overflow-hidden"
     >
-      {/* Parallax Texture */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-        }}
-      />
+      <div className="relative z-10 max-w-6xl mx-auto px-6">
+        {/* Header */}
+        <div className="text-center mb-16">
+          <span className="text-xs font-mono tracking-widest uppercase text-accent/60 mb-4 block">
+            What's Included
+          </span>
+          <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight">
+            Everything your team needs to
+            <br />
+            <span className="font-serif italic text-accent">stay compliant.</span>
+          </h2>
+        </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto px-6">
-        {/* Label */}
-        <span className="text-xs font-mono tracking-widest uppercase text-accent/60 mb-12 block text-center">
-          Our Philosophy
-        </span>
-
-        {/* Manifesto Text – word-by-word reveal */}
-        <div className="text-center">
-          {manifesto.map((line, lineIdx) => {
-            if (line === '') {
-              return <div key={`break-${lineIdx}`} className="h-8" />;
-            }
-
-            const words = line.split(' ');
-            return (
-              <p key={lineIdx} className="mb-1">
-                {words.map((word, wi) => {
-                  const currentIndex = wordIndex++;
-                  return (
-                    <span
-                      key={`${lineIdx}-${wi}`}
-                      ref={(el) => (wordsRef.current[currentIndex] = el)}
-                      className="inline-block text-2xl md:text-4xl lg:text-5xl font-light text-white/90 mr-[0.3em] leading-snug"
-                    >
-                      {word}
-                    </span>
-                  );
-                })}
-              </p>
-            );
-          })}
+        {/* Capability Grid */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {capabilities.map((cap, i) => (
+            <div
+              key={cap.title}
+              ref={(el) => (cardsRef.current[i] = el)}
+              className="opacity-0 bg-white/[0.05] border border-white/[0.08] rounded-2xl p-5 hover:bg-white/[0.08] transition-colors"
+            >
+              <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center mb-4">
+                <cap.icon className="w-5 h-5 text-accent" />
+              </div>
+              <h3 className="text-sm font-bold text-white mb-1">{cap.title}</h3>
+              <p className="text-xs text-white/50 leading-relaxed">{cap.description}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

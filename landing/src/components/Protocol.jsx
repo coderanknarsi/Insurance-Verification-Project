@@ -1,35 +1,38 @@
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Shield, Scan, Activity } from 'lucide-react';
+import { Shield, Scan, Activity, Play } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
+
+const DASHBOARD_BASE = import.meta.env.VITE_DASHBOARD_URL || 'https://app.autolientracker.com';
+const DEMO_URL = `${DASHBOARD_BASE}?demo=true`;
 
 const steps = [
   {
     number: '01',
     icon: Scan,
-    title: 'Connect & Ingest',
+    title: 'Import Your Portfolio',
     description:
-      'Import your loan portfolio or connect via API. Auto Lien Tracker maps each borrower to their vehicle and active policy.',
+      'Add borrowers one at a time or bulk-import from a spreadsheet. Each borrower is mapped to their vehicle and loan automatically.',
     visual: 'geometric',
     accent: '#2563EB',
   },
   {
     number: '02',
     icon: Shield,
-    title: 'Verify & Monitor',
+    title: 'Verify Coverage',
     description:
-      'Our system contacts insurance carriers, verifies active coverage, and confirms your dealership is listed as lienholder — continuously.',
+      'We check insurance directly with supported carriers and through borrower-uploaded documents. Automated weekly scans keep your records current without manual effort.',
     visual: 'scanner',
     accent: '#22C55E',
   },
   {
     number: '03',
     icon: Activity,
-    title: 'Alert & Protect',
+    title: 'Resolve & Protect',
     description:
-      'The moment a policy lapses or a gap is detected, you get an alert. Take action before a loss event — not after.',
+      'When a lapse is detected, borrowers get an email or SMS with a link to upload new proof. Your team tracks every status change in the compliance dashboard.',
     visual: 'waveform',
     accent: '#EF4444',
   },
@@ -169,7 +172,7 @@ export default function Protocol() {
           <h2 className="text-3xl md:text-5xl font-extrabold text-navy leading-tight">
             Three steps to
             <br />
-            <span className="font-serif italic text-accent">total coverage.</span>
+            <span className="font-serif italic text-accent">verified compliance.</span>
           </h2>
         </div>
 
@@ -224,6 +227,20 @@ export default function Protocol() {
               </div>
             );
           })}
+        </div>
+
+        {/* Demo CTA */}
+        <div className="mt-20 text-center">
+          <p className="text-base text-carbon/60 mb-6">
+            See it in action — no signup required
+          </p>
+          <a
+            href={DEMO_URL}
+            className="inline-flex items-center gap-2 bg-accent hover:bg-accent/90 text-white font-semibold text-base py-3.5 px-8 rounded-xl transition-colors shadow-lg shadow-accent/20"
+          >
+            <Play className="w-5 h-5" />
+            Try Interactive Demo
+          </a>
         </div>
       </div>
     </section>

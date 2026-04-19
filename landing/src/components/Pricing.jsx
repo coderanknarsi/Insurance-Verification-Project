@@ -8,46 +8,36 @@ gsap.registerPlugin(ScrollTrigger);
 const DASHBOARD_BASE = import.meta.env.VITE_DASHBOARD_URL || 'https://app.autolientracker.com';
 const SIGNUP_URL = `${DASHBOARD_BASE}?mode=signup`;
 
+const SHARED_FEATURES = [
+  'Automated carrier verification',
+  'Borrower intake via email & SMS',
+  'Insurance card OCR extraction',
+  'Compliance dashboard & history',
+  'Lapse detection & alerts',
+  'Team access with role permissions',
+  'Bulk portfolio import',
+  'Demo environment included',
+];
+
 const plans = [
   {
     name: 'Starter',
     price: 149,
     vehicles: 50,
-    features: [
-      'Up to 50 vehicles',
-      'Email verifications',
-      'Compliance dashboard',
-      'Lapse detection & alerts',
-      'Borrower self-service links',
-    ],
+    features: ['Up to 50 vehicles', ...SHARED_FEATURES],
   },
   {
     name: 'Growth',
     price: 349,
     vehicles: 150,
     popular: true,
-    features: [
-      'Up to 150 vehicles',
-      'Email & SMS verifications',
-      'Compliance dashboard',
-      'Lapse detection & alerts',
-      'Borrower self-service links',
-      'Priority support',
-    ],
+    features: ['Up to 150 vehicles', ...SHARED_FEATURES],
   },
   {
     name: 'Scale',
     price: 599,
     vehicles: 300,
-    features: [
-      'Up to 300 vehicles',
-      'Email & SMS verifications',
-      'Compliance dashboard',
-      'Lapse detection & alerts',
-      'Borrower self-service links',
-      'Priority support',
-      'API access & webhooks',
-    ],
+    features: ['Up to 300 vehicles', ...SHARED_FEATURES],
   },
 ];
 

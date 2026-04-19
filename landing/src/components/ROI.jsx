@@ -71,7 +71,7 @@ export default function ROI() {
 
                 <div className="border-t border-red-500/10 pt-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-white/40">Average BHPH loan value</span>
+                    <span className="text-white/40">Average auto loan balance</span>
                     <span className="text-white/60 font-mono">$12,000–$18,000</span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -117,7 +117,7 @@ export default function ROI() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-white/40">Lapse detection speed</span>
-                    <span className="text-accent font-mono">Real-time</span>
+                    <span className="text-accent font-mono">Weekly automated</span>
                   </div>
                 </div>
               </div>

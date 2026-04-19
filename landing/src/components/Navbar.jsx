@@ -80,9 +80,9 @@ export default function Navbar() {
           aria-label="Toggle menu"
         >
           {mobileOpen ? (
-            <X className={scrolled ? 'text-white' : 'text-navy'} />
+            <X className="text-white" />
           ) : (
-            <Menu className={scrolled ? 'text-white' : 'text-navy'} />
+            <Menu className="text-white" />
           )}
         </button>
       </div>
@@ -96,7 +96,7 @@ export default function Navbar() {
               href={link.href}
               onClick={() => setMobileOpen(false)}
               className={`text-sm font-medium ${
-                scrolled ? 'text-white/80' : 'text-carbon/80'
+                scrolled ? 'text-white/80' : 'text-white/80'
               }`}
             >
               {link.label}

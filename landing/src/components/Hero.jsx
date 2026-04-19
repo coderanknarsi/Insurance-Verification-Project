@@ -101,10 +101,10 @@ export default function Hero() {
         {/* Headline */}
         <div ref={headlineRef} className="mb-8">
           <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold text-white leading-[0.95] tracking-tight">
-            Stop Losing Money on
+            Stop Chasing
           </h1>
           <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-serif italic text-accent leading-[1.1] mt-2">
-            Uninsured Collateral.
+            Insurance Paperwork.
           </h1>
         </div>
 
@@ -113,9 +113,9 @@ export default function Hero() {
           ref={subRef}
           className="opacity-0 text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10 leading-relaxed"
         >
-          Automated insurance tracking for BHPH dealers, banks, and credit
-          unions. Verify borrower coverage in real time, detect lapses before
-          they cost you, and keep every vehicle protected — automatically.
+          Automated insurance verification for auto lenders and dealerships.
+          Verify coverage across major carriers, detect lapses weekly, and
+          let borrowers upload proof themselves — no more phone tag.
         </p>
 
         {/* CTA */}

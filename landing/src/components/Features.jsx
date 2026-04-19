@@ -1,188 +1,126 @@
 import { useState, useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Radio, AlertTriangle, MousePointerClick } from 'lucide-react';
+import { Camera, ShieldCheck, Users, MousePointerClick } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-/* ─── Feature 1: Diagnostic Shuffler ─────────────── */
-function DiagnosticShuffler() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const cards = [
-    {
-      status: 'COMPLIANT',
-      color: 'bg-green-500',
-      borrower: 'Martinez, R.',
-      policy: 'AUTO-2847-X',
-      expires: '2025-09-14',
-    },
-    {
-      status: 'AT RISK',
-      color: 'bg-yellow-500',
-      borrower: 'Chen, W.',
-      policy: 'AUTO-1053-K',
-      expires: '2025-02-28',
-    },
-    {
-      status: 'LAPSED',
-      color: 'bg-red-500',
-      borrower: 'Thompson, J.',
-      policy: 'AUTO-4411-M',
-      expires: '2024-12-01',
-    },
+/* ─── Feature 1: Borrower Intake Demo ─────────────── */
+function IntakeDemo() {
+  const [step, setStep] = useState(0);
+  const steps = [
+    { label: 'SMS sent to borrower', icon: '📱', color: 'text-accent' },
+    { label: 'Borrower uploads insurance card', icon: '📷', color: 'text-green-400' },
+    { label: 'OCR extracts policy details', icon: '🔍', color: 'text-yellow-400' },
+    { label: 'Coverage verified automatically', icon: '✓', color: 'text-green-400' },
   ];
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveIndex((i) => (i + 1) % cards.length);
+      setStep((s) => (s + 1) % steps.length);
     }, 2500);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="relative h-48 w-full">
-      {cards.map((card, i) => {
-        const offset = ((i - activeIndex + cards.length) % cards.length);
-        const isActive = offset === 0;
-        return (
+    <div className="bg-white rounded-xl border border-gray-100 p-4 h-48 overflow-hidden flex flex-col justify-between">
+      <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Borrower Intake Flow</p>
+      <div className="flex-1 flex flex-col justify-center space-y-2">
+        {steps.map((s, i) => (
           <div
-            key={card.policy}
-            className={`absolute inset-x-0 mx-auto w-[90%] bg-white rounded-xl border border-gray-100 shadow-lg p-4 transition-all duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${
-              isActive ? 'z-30 translate-y-0 scale-100 opacity-100' :
-              offset === 1 ? 'z-20 translate-y-4 scale-[0.96] opacity-60' :
-              'z-10 translate-y-8 scale-[0.92] opacity-30'
+            key={s.label}
+            className={`flex items-center gap-2 text-xs p-2 rounded-lg transition-all duration-500 ${
+              i <= step
+                ? 'bg-accent/5 border border-accent/10'
+                : 'opacity-30'
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full text-white ${card.color}`}>
-                {card.status}
-              </span>
-              <span className="text-xs text-gray-400 font-mono">{card.policy}</span>
-            </div>
-            <p className="text-sm font-semibold text-navy">{card.borrower}</p>
-            <p className="text-xs text-gray-400 mt-1">Expires: {card.expires}</p>
+            <span className={`text-sm ${i <= step ? s.color : 'text-gray-300'}`}>{s.icon}</span>
+            <span className={i <= step ? 'text-navy font-medium' : 'text-gray-400'}>{s.label}</span>
+            {i < step && <span className="ml-auto text-green-500 text-xs">✓</span>}
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
 
-/* ─── Feature 2: Telemetry Typewriter ────────────── */
-function TelemetryTypewriter() {
-  const [lines, setLines] = useState([]);
-  const containerRef = useRef(null);
-
-  const logEntries = [
-    { text: '[SCAN] Policy AUTO-2847-X verified', color: 'text-green-400' },
-    { text: '[WARN] Coverage gap detected: Chen, W.', color: 'text-yellow-400' },
-    { text: '[ALERT] Policy lapsed: Thompson, J.', color: 'text-red-400' },
-    { text: '[SCAN] Policy AUTO-9921-B verified', color: 'text-green-400' },
-    { text: '[INFO] Dealer notification sent', color: 'text-accent' },
-    { text: '[SCAN] Policy AUTO-3344-F verified', color: 'text-green-400' },
+/* ─── Feature 2: Carrier Verification Status ────────────── */
+function VerificationStatus() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const carriers = [
+    { name: 'Progressive', status: 'Verified', color: 'bg-green-500', policy: 'AUTO-2847-X' },
+    { name: 'State Farm', status: 'Lapsed', color: 'bg-red-500', policy: 'AUTO-1053-K' },
+    { name: 'Allstate', status: 'Verified', color: 'bg-green-500', policy: 'AUTO-9921-B' },
+    { name: 'National General', status: 'Expiring', color: 'bg-yellow-500', policy: 'AUTO-4411-M' },
   ];
 
   useEffect(() => {
-    let lineIndex = 0;
     const interval = setInterval(() => {
-      setLines((prev) => {
-        const next = [...prev, logEntries[lineIndex % logEntries.length]];
-        if (next.length > 5) next.shift();
-        return next;
-      });
-      lineIndex++;
+      setActiveIndex((i) => (i + 1) % carriers.length);
     }, 2000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="bg-navy rounded-xl p-4 font-mono text-xs h-48 overflow-hidden flex flex-col justify-end"
-    >
-      {lines.map((line, i) => (
-        <div
-          key={`${i}-${line.text}`}
-          className={`${line.color} transition-opacity duration-300`}
-        >
-          <span className="text-white/30 mr-2">{'>'}</span>
-          {line.text}
-          {i === lines.length - 1 && (
-            <span className="cursor-blink ml-0.5 text-accent">▊</span>
-          )}
-        </div>
-      ))}
-      {lines.length === 0 && (
-        <div className="text-white/30">
-          <span className="mr-2">{'>'}</span>
-          Initializing scanner
-          <span className="cursor-blink ml-0.5 text-accent">▊</span>
-        </div>
-      )}
+    <div className="bg-navy rounded-xl p-4 font-mono text-xs h-48 overflow-hidden flex flex-col">
+      <p className="text-white/30 text-[10px] uppercase tracking-wider mb-3">Carrier Verification</p>
+      <div className="flex-1 space-y-2">
+        {carriers.map((c, i) => (
+          <div
+            key={c.policy}
+            className={`flex items-center justify-between p-2 rounded-lg transition-all duration-500 ${
+              i === activeIndex ? 'bg-white/10' : 'bg-white/[0.03]'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${c.color}`} />
+              <span className="text-white/80">{c.name}</span>
+            </div>
+            <span className={`text-[10px] font-semibold ${
+              c.status === 'Verified' ? 'text-green-400' :
+              c.status === 'Lapsed' ? 'text-red-400' : 'text-yellow-400'
+            }`}>{c.status}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-/* ─── Feature 3: Protocol Scheduler ──────────────── */
-function ProtocolScheduler() {
-  const [activeDay, setActiveDay] = useState(2);
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const tasks = [
-    ['Scan batch A', 'Scan batch B'],
-    ['Verify renewals'],
-    ['Lapse check', 'Send alerts'],
-    ['Scan batch C'],
-    ['Weekly report', 'Compliance audit'],
-    [],
-    [],
+/* ─── Feature 3: Compliance Dashboard ──────────────── */
+function ComplianceDashboard() {
+  const stats = [
+    { label: 'Verified', count: 142, color: 'text-green-400', bg: 'bg-green-400' },
+    { label: 'Pending', count: 8, color: 'text-yellow-400', bg: 'bg-yellow-400' },
+    { label: 'Lapsed', count: 3, color: 'text-red-400', bg: 'bg-red-400' },
   ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveDay((d) => (d + 1) % 7);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const total = stats.reduce((s, x) => s + x.count, 0);
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-4 h-48 overflow-hidden">
-      <div className="flex gap-1 mb-3">
-        {days.map((day, i) => (
-          <div
-            key={day}
-            className={`flex-1 text-center text-[10px] font-mono py-1 rounded transition-all duration-300 ${
-              i === activeDay
-                ? 'bg-accent text-white font-semibold'
-                : 'bg-gray-50 text-gray-400'
-            }`}
-          >
-            {day}
+      <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-3">Portfolio Overview</p>
+      {/* Bar */}
+      <div className="flex h-3 rounded-full overflow-hidden mb-4">
+        {stats.map((s) => (
+          <div key={s.label} className={`${s.bg} transition-all`} style={{ width: `${(s.count / total) * 100}%` }} />
+        ))}
+      </div>
+      {/* Stats */}
+      <div className="space-y-2">
+        {stats.map((s) => (
+          <div key={s.label} className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${s.bg}`} />
+              <span className="text-navy/70">{s.label}</span>
+            </div>
+            <span className={`font-mono font-semibold ${s.color}`}>{s.count}</span>
           </div>
         ))}
       </div>
-      <div className="space-y-2">
-        {(tasks[activeDay] || []).length > 0 ? (
-          tasks[activeDay].map((task, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 text-xs bg-accent/5 text-navy p-2 rounded-lg border border-accent/10"
-            >
-              <div className="w-1.5 h-1.5 bg-accent rounded-full" />
-              {task}
-            </div>
-          ))
-        ) : (
-          <p className="text-xs text-gray-300 font-mono text-center mt-6">
-            No scheduled tasks
-          </p>
-        )}
-      </div>
-      {/* Animated cursor */}
-      <div
-        className="mt-3 flex items-center gap-1 text-[10px] text-accent/60 font-mono transition-opacity"
-      >
-        <MousePointerClick className="w-3 h-3" />
-        Automated — no manual input required
+      <div className="mt-3 flex items-center gap-1 text-[10px] text-accent/60 font-mono">
+        <Users className="w-3 h-3" />
+        Team access · Role-based permissions
       </div>
     </div>
   );
@@ -191,25 +129,25 @@ function ProtocolScheduler() {
 /* ─── Features Section ───────────────────────────── */
 const features = [
   {
-    icon: Radio,
-    title: 'Real-Time Monitoring',
+    icon: Camera,
+    title: 'Borrower Intake & OCR',
     description:
-      'Continuous verification scans detect policy changes the moment they happen. No more quarterly spot-checks.',
-    Component: DiagnosticShuffler,
+      'Send borrowers a link via email or SMS. They upload their insurance card and our OCR extracts policy details automatically — no manual data entry.',
+    Component: IntakeDemo,
   },
   {
-    icon: AlertTriangle,
-    title: 'Automated Lapse Detection',
+    icon: ShieldCheck,
+    title: 'Carrier Verification',
     description:
-      'Instant alerts when coverage gaps appear. Protect your collateral before losses occur.',
-    Component: TelemetryTypewriter,
+      'We verify coverage directly with Progressive, State Farm, Allstate, and National General. Weekly automated checks catch lapses before they become losses.',
+    Component: VerificationStatus,
   },
   {
-    icon: MousePointerClick,
-    title: 'One-Click Verification',
+    icon: Users,
+    title: 'Compliance Dashboard',
     description:
-      'Send borrowers a secure link to verify insurance. Results flow directly into your dashboard.',
-    Component: ProtocolScheduler,
+      'See every borrower\'s insurance status at a glance. Track verification history, manage your team with role-based access, and export compliance reports.',
+    Component: ComplianceDashboard,
   },
 ];
 

@@ -1,4 +1,4 @@
-import { Shield, Lock, Server, BadgeCheck } from 'lucide-react';
+import { Shield, Lock, BadgeCheck } from 'lucide-react';
 
 const footerLinks = [
   {
@@ -12,16 +12,7 @@ const footerLinks = [
   {
     heading: 'Company',
     links: [
-      { label: 'About', href: '#' },
       { label: 'Contact', href: '#contact' },
-    ],
-  },
-  {
-    heading: 'Legal',
-    links: [
-      { label: 'Privacy Policy', href: '#' },
-      { label: 'Terms of Service', href: '#' },
-      { label: 'Security', href: '#' },
     ],
   },
 ];
@@ -73,28 +64,21 @@ export default function Footer() {
         {/* Trust Badges */}
         <div className="border-t border-white/[0.06] pt-8 pb-8 mb-8">
           <p className="text-xs font-mono uppercase tracking-widest text-white/20 text-center mb-6">
-            Enterprise-Grade Security
+            Built on Secure Infrastructure
           </p>
           <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
             <div className="flex items-center gap-2 text-white/40">
               <Lock className="w-5 h-5 text-accent/60" />
               <div>
-                <p className="text-sm font-medium text-white/60">256-bit AES</p>
-                <p className="text-[10px] text-white/30">Encryption at Rest & Transit</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-white/40">
-              <Server className="w-5 h-5 text-accent/60" />
-              <div>
-                <p className="text-sm font-medium text-white/60">SOC 2 Type II</p>
-                <p className="text-[10px] text-white/30">Compliant Infrastructure</p>
+                <p className="text-sm font-medium text-white/60">Encrypted</p>
+                <p className="text-[10px] text-white/30">Data encrypted in transit & at rest</p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-white/40">
               <BadgeCheck className="w-5 h-5 text-accent/60" />
               <div>
-                <p className="text-sm font-medium text-white/60">MeasureOne Certified</p>
-                <p className="text-[10px] text-white/30">Verified Data Partner</p>
+                <p className="text-sm font-medium text-white/60">Automated Verification</p>
+                <p className="text-[10px] text-white/30">Direct carrier integration</p>
               </div>
             </div>
           </div>

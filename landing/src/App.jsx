@@ -14,9 +14,9 @@ export default function App() {
       <Navbar />
       <Hero />
       <Features />
-      <ROI />
       <Philosophy />
       <Protocol />
+      <ROI />
       <Pricing />
       <Contact />
       <Footer />
