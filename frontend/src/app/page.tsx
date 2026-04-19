@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithCustomToken,
   GoogleAuthProvider,
   OAuthProvider,
   signOut,
@@ -14,21 +15,23 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Chrome } from "lucide-react";
+import { Shield, Play } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { DashboardSummary } from "@/components/dashboard-summary";
 import { DashboardWidgets } from "@/components/dashboard-widgets";
-import { BorrowerTable } from "@/components/borrower-table";
+import { BorrowerTable, type StatusFilter } from "@/components/borrower-table";
 import { BorrowerDetailPanel } from "@/components/borrower-detail-panel";
 import { ComplianceSettings } from "@/components/compliance-settings";
 import { BillingSettings } from "@/components/billing-settings";
+import { VerificationsList } from "@/components/verifications-list";
+import { TeamSettings } from "@/components/team-settings";
+import { callGetDemoToken } from "@/lib/api";
 import type { BorrowerWithVehicles } from "@/lib/api";
 
-// TODO: Replace with actual org ID from authenticated user's profile
-const DEMO_ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "";
+const MARKETING_SITE_URL = process.env.NEXT_PUBLIC_MARKETING_SITE_URL ?? "https://autolientracker.com";
 
 export default function Home() {
-  const { user, loading } = useAuth();
+  const { user, loading, organizationId, role } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +45,30 @@ export default function Home() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [selectedBorrower, setSelectedBorrower] = useState<BorrowerWithVehicles | null>(null);
   const [allBorrowers, setAllBorrowers] = useState<BorrowerWithVehicles[]>([]);
+  const [borrowerFilter, setBorrowerFilter] = useState<StatusFilter>("ALL");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const borrowerTableRef = useRef<HTMLDivElement>(null);
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  const friendlyAuthError = (err: unknown): string => {
+    const msg = err instanceof Error ? err.message : "";
+    const match = msg.match(/\(auth\/([^)]+)\)/);
+    const code = match?.[1] ?? "";
+    const map: Record<string, string> = {
+      "email-already-in-use": "An account with this email already exists.",
+      "invalid-email": "Please enter a valid email address.",
+      "user-disabled": "This account has been disabled.",
+      "user-not-found": "No account found with this email.",
+      "wrong-password": "Incorrect password. Please try again.",
+      "weak-password": "Password should be at least 6 characters.",
+      "too-many-requests": "Too many attempts. Please try again later.",
+      "invalid-credential": "Invalid email or password.",
+      "network-request-failed": "Network error. Check your connection.",
+      "popup-closed-by-user": "Sign-in popup was closed.",
+      "internal-error": "Something went wrong. Please try again.",
+    };
+    return map[code] || "Authentication failed. Please try again.";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,8 +81,7 @@ export default function Home() {
         await signInWithEmailAndPassword(getClientAuth(), email, password);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Authentication failed";
-      setError(msg.replace("Firebase: ", "").replace(/\(auth\/.*\)/, "").trim());
+      setError(friendlyAuthError(err));
     } finally {
       setSigningIn(false);
     }
@@ -66,8 +92,7 @@ export default function Home() {
     try {
       await signInWithPopup(getClientAuth(), new GoogleAuthProvider());
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Google sign-in failed";
-      setError(msg.replace("Firebase: ", "").replace(/\(auth\/.*\)/, "").trim());
+      setError(friendlyAuthError(err));
     }
   };
 
@@ -79,8 +104,7 @@ export default function Home() {
       provider.addScope("name");
       await signInWithPopup(getClientAuth(), provider);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Apple sign-in failed";
-      setError(msg.replace("Firebase: ", "").replace(/\(auth\/.*\)/, "").trim());
+      setError(friendlyAuthError(err));
     }
   };
 
@@ -88,14 +112,38 @@ export default function Home() {
     await signOut(getClientAuth());
   };
 
-  if (loading) {
+  const handleTryDemo = useCallback(async () => {
+    setDemoLoading(true);
+    setError(null);
+    try {
+      const result = await callGetDemoToken();
+      await signInWithCustomToken(getClientAuth(), result.data.token);
+    } catch {
+      setError("Failed to load demo. Please try again.");
+    } finally {
+      setDemoLoading(false);
+    }
+  }, []);
+
+  // Auto-trigger demo login when arriving via ?demo=true from landing page
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("demo") === "true" && !user && !loading) {
+      // Clean the URL so it doesn't re-trigger
+      window.history.replaceState({}, "", "/");
+      handleTryDemo();
+    }
+  }, [user, loading, handleTryDemo]);
+
+  if (loading || demoLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-accent/20 rounded-lg flex items-center justify-center animate-pulse">
             <Shield className="w-4 h-4 text-accent" />
           </div>
-          <p className="text-carbon-light text-sm">Loading...</p>
+          <p className="text-carbon-light text-sm">{demoLoading ? "Loading demo..." : "Loading..."}</p>
         </div>
       </div>
     );
@@ -106,14 +154,17 @@ export default function Home() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-full max-w-sm">
           {/* Brand */}
-          <div className="flex items-center justify-center gap-3 mb-8">
+          <a
+            href={MARKETING_SITE_URL}
+            className="mb-8 flex items-center justify-center gap-3 transition-opacity hover:opacity-90"
+          >
             <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center">
               <Shield className="w-5 h-5 text-accent" />
             </div>
             <span className="text-xl font-semibold text-offwhite tracking-tight">
               Auto Lien Tracker
             </span>
-          </div>
+          </a>
 
           {/* Auth Card */}
           <div className="bg-card-bg border border-border-subtle rounded-2xl p-8">
@@ -246,22 +297,58 @@ export default function Home() {
 
         {/* Dashboard Content */}
         <div className="p-8 space-y-6">
-          {activeNav === "dashboard" && (
+          {/* Demo Banner */}
+          {organizationId === "demo-org" && (
+            <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/30 rounded-xl px-5 py-3">
+              <div className="flex items-center gap-3">
+                <Play className="w-4 h-4 text-blue-400" />
+                <p className="text-sm text-blue-200">
+                  You&apos;re exploring a demo account with sample data.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { signOut(getClientAuth()); setTimeout(() => { window.location.href = "/?mode=signup"; }, 500); }}
+                className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap"
+              >
+                Sign Up for Free Trial &rarr;
+              </button>
+            </div>
+          )}
+
+          {activeNav === "dashboard" && organizationId && (
             <>
-              <DashboardSummary organizationId={DEMO_ORG_ID} />
-              <DashboardWidgets borrowers={allBorrowers} />
-              <BorrowerTable
-                organizationId={DEMO_ORG_ID}
-                onSelectBorrower={setSelectedBorrower}
-                onBorrowersLoaded={setAllBorrowers}
+              <DashboardSummary
+                organizationId={organizationId}
+                onFilterChange={(f) => {
+                  setBorrowerFilter(f);
+                  borrowerTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
               />
+              <DashboardWidgets borrowers={allBorrowers} />
+              <div ref={borrowerTableRef}>
+                <BorrowerTable
+                  organizationId={organizationId}
+                  onSelectBorrower={setSelectedBorrower}
+                  onBorrowersLoaded={setAllBorrowers}
+                  externalFilter={borrowerFilter}
+                  onFilterChange={setBorrowerFilter}
+                  refreshKey={refreshKey}
+                />
+              </div>
             </>
           )}
-          {activeNav === "billing" && (
-            <BillingSettings organizationId={DEMO_ORG_ID} />
+          {activeNav === "verifications" && organizationId && (
+            <VerificationsList organizationId={organizationId} />
           )}
-          {activeNav === "settings" && (
-            <ComplianceSettings organizationId={DEMO_ORG_ID} />
+          {activeNav === "team" && organizationId && (
+            <TeamSettings organizationId={organizationId} currentUserRole={role} />
+          )}
+          {activeNav === "billing" && organizationId && (
+            <BillingSettings organizationId={organizationId} />
+          )}
+          {activeNav === "settings" && organizationId && (
+            <ComplianceSettings organizationId={organizationId} />
           )}
         </div>
       </main>
@@ -276,6 +363,8 @@ export default function Home() {
           <BorrowerDetailPanel
             borrower={selectedBorrower}
             onClose={() => setSelectedBorrower(null)}
+            onUpdated={() => setRefreshKey((k) => k + 1)}
+            onDeleted={() => { setSelectedBorrower(null); setRefreshKey((k) => k + 1); }}
           />
         </>
       )}
