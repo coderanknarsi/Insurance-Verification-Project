@@ -17,7 +17,23 @@ landing/dist/
 # Environment files
 .env
 .env.local
+.env.*
+!.env.example
 functions/.env
+functions/.env.*
+!functions/.env.example
+engine/.env
+engine/.env.*
+!engine/.env.example
+landing/.env
+landing/.env.*
+!landing/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Credentials / secrets
+_cred_temp.json
 
 # IDE
 .idea/
