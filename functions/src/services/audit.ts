@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { collections } from "../config/firestore";
-import { AuditAction, AuditEntityType } from "../types/audit";
+import { AuditAction, AuditEntityType, AuditLogEntry } from "../types/audit";
 
 export async function logAudit(params: {
   organizationId: string;
@@ -11,14 +11,15 @@ export async function logAudit(params: {
   previousValue?: Record<string, unknown>;
   newValue?: Record<string, unknown>;
 }): Promise<void> {
-  await collections.auditLog.add({
+  const doc: Omit<AuditLogEntry, "id"> = {
     organizationId: params.organizationId,
     entityType: params.entityType,
     entityId: params.entityId,
     action: params.action,
     performedBy: params.performedBy,
-    previousValue: params.previousValue,
-    newValue: params.newValue,
     timestamp: Timestamp.now(),
-  });
+    ...(params.previousValue !== undefined && { previousValue: params.previousValue }),
+    ...(params.newValue !== undefined && { newValue: params.newValue }),
+  };
+  await collections.auditLog.add(doc);
 }

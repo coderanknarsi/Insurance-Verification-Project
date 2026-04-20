@@ -10,7 +10,7 @@ let stripeInstance: Stripe | null = null;
 
 export function getStripe(): Stripe {
   if (!stripeInstance) {
-    const key = stripeSecretKey.value();
+    const key = stripeSecretKey.value().trim();
     if (!key) {
       throw new Error("STRIPE_SECRET_KEY is not configured");
     }

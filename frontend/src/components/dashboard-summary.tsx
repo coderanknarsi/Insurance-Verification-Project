@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import { ShieldCheck, AlertTriangle, ShieldX, Bell } from "lucide-react";
 import { callGetDashboardSummary } from "@/lib/api";
 
+type StatusFilter = "ALL" | "GREEN" | "YELLOW" | "RED" | "ACTION_REQUIRED";
+
 interface DashboardSummaryProps {
   organizationId: string;
+  onFilterChange?: (filter: StatusFilter) => void;
 }
 
 interface Summary {
@@ -16,7 +19,7 @@ interface Summary {
   totalBorrowers: number;
 }
 
-export function DashboardSummary({ organizationId }: DashboardSummaryProps) {
+export function DashboardSummary({ organizationId, onFilterChange }: DashboardSummaryProps) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,32 +82,35 @@ export function DashboardSummary({ organizationId }: DashboardSummaryProps) {
     {
       title: "Compliant",
       count: summary.green,
-      subtitle: "Active & verified",
+      subtitle: "Active coverage",
       icon: ShieldCheck,
       accent: "#22C55E",
       bgAccent: "rgba(34, 197, 94, 0.08)",
       borderAccent: "rgba(34, 197, 94, 0.2)",
       pct: Math.round((summary.green / total) * 100),
+      filterValue: "GREEN" as StatusFilter,
     },
     {
       title: "At Risk",
       count: summary.yellow,
-      subtitle: "Expiring soon",
+      subtitle: "Needs attention",
       icon: AlertTriangle,
       accent: "#EAB308",
       bgAccent: "rgba(234, 179, 8, 0.08)",
       borderAccent: "rgba(234, 179, 8, 0.2)",
       pct: Math.round((summary.yellow / total) * 100),
+      filterValue: "YELLOW" as StatusFilter,
     },
     {
       title: "Non-Compliant",
       count: summary.red,
-      subtitle: "Lapsed or unverified",
+      subtitle: "Lapsed or no coverage",
       icon: ShieldX,
       accent: "#EF4444",
       bgAccent: "rgba(239, 68, 68, 0.08)",
       borderAccent: "rgba(239, 68, 68, 0.2)",
       pct: Math.round((summary.red / total) * 100),
+      filterValue: "RED" as StatusFilter,
     },
   ];
 
@@ -116,8 +122,12 @@ export function DashboardSummary({ organizationId }: DashboardSummaryProps) {
     <div className="space-y-4">
       {/* Action Required Banner */}
       <div
-        className="relative overflow-hidden bg-card-bg border rounded-xl px-5 py-3.5 flex items-center justify-between"
+        className="relative overflow-hidden bg-card-bg border rounded-xl px-5 py-3.5 flex items-center justify-between cursor-pointer hover:bg-white/[0.02] transition-colors"
         style={{ borderColor: "rgba(249, 115, 22, 0.25)" }}
+        onClick={() => onFilterChange?.("ACTION_REQUIRED")}
+        role="button"
+        tabIndex={0}
+        title="View all borrowers needing attention"
       >
         <div
           className="absolute inset-0 opacity-[0.04]"
@@ -154,8 +164,12 @@ export function DashboardSummary({ organizationId }: DashboardSummaryProps) {
       {cards.map((card) => (
         <div
           key={card.title}
-          className="bg-card-bg border rounded-xl p-5 transition-all duration-200 hover:translate-y-[-1px] hover:shadow-lg hover:shadow-black/20"
+          className="bg-card-bg border rounded-xl p-5 transition-all duration-200 hover:translate-y-[-1px] hover:shadow-lg hover:shadow-black/20 cursor-pointer"
           style={{ borderColor: card.borderAccent }}
+          onClick={() => onFilterChange?.(card.filterValue)}
+          role="button"
+          tabIndex={0}
+          title={`View ${card.title.toLowerCase()} borrowers`}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-medium uppercase tracking-wider" style={{ color: card.accent }}>

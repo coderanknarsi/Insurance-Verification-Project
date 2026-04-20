@@ -29,9 +29,11 @@ import { callGetDemoToken } from "@/lib/api";
 import type { BorrowerWithVehicles } from "@/lib/api";
 
 const MARKETING_SITE_URL = process.env.NEXT_PUBLIC_MARKETING_SITE_URL ?? "https://autolientracker.com";
+const PENDING_ORGANIZATION_NAME_KEY = "pendingOrganizationName";
 
 export default function Home() {
   const { user, loading, organizationId, role } = useAuth();
+  const [organizationName, setOrganizationName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -70,12 +72,33 @@ export default function Home() {
     return map[code] || "Authentication failed. Please try again.";
   };
 
+  const persistOrganizationNameForSignup = (): string | null => {
+    const normalizedName = organizationName.trim();
+
+    if (!isSignUp) {
+      sessionStorage.removeItem(PENDING_ORGANIZATION_NAME_KEY);
+      return null;
+    }
+
+    if (!normalizedName) {
+      setError("Enter your company, dealership, or lender name.");
+      return null;
+    }
+
+    sessionStorage.setItem(PENDING_ORGANIZATION_NAME_KEY, normalizedName);
+    return normalizedName;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSigningIn(true);
     setError(null);
     try {
       if (isSignUp) {
+        if (!persistOrganizationNameForSignup()) {
+          setSigningIn(false);
+          return;
+        }
         await createUserWithEmailAndPassword(getClientAuth(), email, password);
       } else {
         await signInWithEmailAndPassword(getClientAuth(), email, password);
@@ -90,6 +113,9 @@ export default function Home() {
   const handleGoogleSignIn = async () => {
     setError(null);
     try {
+      if (isSignUp && !persistOrganizationNameForSignup()) {
+        return;
+      }
       await signInWithPopup(getClientAuth(), new GoogleAuthProvider());
     } catch (err) {
       setError(friendlyAuthError(err));
@@ -99,6 +125,9 @@ export default function Home() {
   const handleAppleSignIn = async () => {
     setError(null);
     try {
+      if (isSignUp && !persistOrganizationNameForSignup()) {
+        return;
+      }
       const provider = new OAuthProvider("apple.com");
       provider.addScope("email");
       provider.addScope("name");
@@ -210,6 +239,20 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {isSignUp && (
+                <div className="space-y-2">
+                  <Label htmlFor="organizationName" className="text-sm text-carbon-light">Company / dealership / lender name</Label>
+                  <Input
+                    id="organizationName"
+                    type="text"
+                    value={organizationName}
+                    onChange={(e) => setOrganizationName(e.target.value)}
+                    required={isSignUp}
+                    placeholder="Acme Auto Finance"
+                    className="bg-surface border-border-subtle text-offwhite placeholder:text-carbon focus:border-accent focus:ring-accent/30"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm text-carbon-light">Email</Label>
                 <Input
@@ -248,7 +291,13 @@ export default function Home() {
               {isSignUp ? "Already have an account?" : "Don\u2019t have an account?"}{" "}
               <button
                 type="button"
-                onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError(null);
+                  if (isSignUp) {
+                    sessionStorage.removeItem(PENDING_ORGANIZATION_NAME_KEY);
+                  }
+                }}
                 className="text-accent hover:text-accent/80 font-medium transition-colors"
               >
                 {isSignUp ? "Sign in" : "Start free pilot"}

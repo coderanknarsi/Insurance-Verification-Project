@@ -8,7 +8,10 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  FileText,
+  Download,
   ExternalLink,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,12 +21,23 @@ import {
   callCancelSubscription,
   callResumeSubscription,
   callCreateBillingPortalSession,
+  callGetBillingHistory,
 } from "@/lib/api";
-import type { SubscriptionStatus } from "@/lib/api";
+import type { SubscriptionStatus, InvoiceRecord } from "@/lib/api";
+import { EmbeddedCheckoutDialog } from "@/components/embedded-checkout";
 
 interface BillingSettingsProps {
   organizationId: string;
 }
+
+const SHARED_FEATURES = [
+  "Automated insurance verification",
+  "Compliance dashboard",
+  "Lapse detection & alerts",
+  "Email & SMS notifications",
+  "Borrower self-service links",
+  "Team member access",
+];
 
 const PLANS = [
   {
@@ -31,7 +45,7 @@ const PLANS = [
     name: "Starter",
     price: 149,
     vehicles: 50,
-    features: ["Up to 50 vehicles", "Email verifications", "Compliance dashboard"],
+    features: ["Up to 50 vehicles", ...SHARED_FEATURES],
   },
   {
     id: "GROWTH",
@@ -39,25 +53,14 @@ const PLANS = [
     price: 349,
     vehicles: 150,
     popular: true,
-    features: [
-      "Up to 150 vehicles",
-      "Email & SMS verifications",
-      "Compliance dashboard",
-      "Priority support",
-    ],
+    features: ["Up to 150 vehicles", ...SHARED_FEATURES],
   },
   {
     id: "SCALE",
     name: "Scale",
     price: 599,
     vehicles: 300,
-    features: [
-      "Up to 300 vehicles",
-      "Email & SMS verifications",
-      "Compliance dashboard",
-      "Priority support",
-      "API access",
-    ],
+    features: ["Up to 300 vehicles", ...SHARED_FEATURES],
   },
 ];
 
@@ -83,6 +86,13 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(true);
+  const [checkout, setCheckout] = useState<{
+    open: boolean;
+    mode: "subscription" | "setup";
+    plan?: string;
+  }>({ open: false, mode: "setup" });
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -100,18 +110,22 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
     fetchStatus();
   }, [fetchStatus]);
 
-  const handleSubscribe = async (planId: string) => {
-    setActionLoading(planId);
-    setError(null);
-    try {
-      await callCreateSubscription({ organizationId, plan: planId });
-      await fetchStatus();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to create subscription";
-      setError(msg);
-    } finally {
-      setActionLoading(null);
+  useEffect(() => {
+    async function fetchInvoices() {
+      try {
+        const result = await callGetBillingHistory({ organizationId });
+        setInvoices(result.data.invoices);
+      } catch {
+        // Silently fail — invoices section just stays empty
+      } finally {
+        setInvoicesLoading(false);
+      }
     }
+    fetchInvoices();
+  }, [organizationId]);
+
+  const handleSubscribe = async (planId: string) => {
+    setCheckout({ open: true, mode: "subscription", plan: planId });
   };
 
   const handleChangePlan = async (newPlan: string) => {
@@ -157,20 +171,12 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
   };
 
   const handleManageBilling = async () => {
-    setActionLoading("portal");
-    setError(null);
-    try {
-      const result = await callCreateBillingPortalSession({
-        organizationId,
-        returnUrl: window.location.href,
-      });
-      window.open(result.data.url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to open billing portal";
-      setError(msg);
-    } finally {
-      setActionLoading(null);
-    }
+    setCheckout({ open: true, mode: "setup" });
+  };
+
+  const handleCheckoutComplete = async () => {
+    setCheckout({ open: false, mode: "setup" });
+    await fetchStatus();
   };
 
   if (loading) {
@@ -190,6 +196,17 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
 
   return (
     <div className="max-w-4xl space-y-6">
+      {/* Embedded Checkout Dialog */}
+      {checkout.open && (
+        <EmbeddedCheckoutDialog
+          organizationId={organizationId}
+          mode={checkout.mode}
+          plan={checkout.plan}
+          onClose={() => setCheckout({ open: false, mode: "setup" })}
+          onComplete={handleCheckoutComplete}
+        />
+      )}
+
       {error && (
         <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
           <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -218,16 +235,17 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
                     ${sub.priceMonthly}/month &middot; {sub.activeVehicles}/{sub.maxVehicles} vehicles
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleManageBilling}
-                  disabled={actionLoading === "portal"}
-                  className="bg-transparent border-border-subtle text-carbon-light hover:text-offwhite hover:bg-white/[0.04]"
-                >
-                  {actionLoading === "portal" ? "Opening..." : "Manage Billing"}
-                  <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
-                </Button>
+                {sub.status === "active" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleManageBilling}
+                    className="bg-transparent border-border-subtle text-carbon-light hover:text-offwhite hover:bg-white/[0.04]"
+                  >
+                    Payment Methods
+                    <CreditCard className="w-3.5 h-3.5 ml-1.5" />
+                  </Button>
+                )}
               </div>
 
               {/* Trial Banner */}
@@ -242,6 +260,13 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
                       Add a payment method to continue after your trial ends
                     </p>
                   </div>
+                  <Button
+                    size="sm"
+                    onClick={handleManageBilling}
+                    className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border-0"
+                  >
+                    Add Payment
+                  </Button>
                 </div>
               )}
 
@@ -355,7 +380,7 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
               return (
                 <div
                   key={plan.id}
-                  className={`relative rounded-xl border p-5 transition-all ${
+                  className={`relative rounded-xl border p-5 transition-all flex flex-col ${
                     isCurrent
                       ? "border-accent bg-accent/5"
                       : "border-border-subtle hover:border-accent/40"
@@ -387,7 +412,7 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-4">
+                  <div className="mt-auto pt-4">
                     {isCurrent ? (
                       <Button
                         disabled
@@ -449,6 +474,101 @@ export function BillingSettings({ organizationId }: BillingSettingsProps) {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Billing History */}
+      <div className="bg-card-bg border border-border-subtle rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Receipt className="w-4 h-4 text-carbon-light" />
+          <h3 className="text-sm font-semibold text-offwhite">Billing History</h3>
+        </div>
+
+        {invoicesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : invoices.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-carbon-light">
+            <FileText className="w-6 h-6 mb-2" />
+            <p className="text-xs">No invoices yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border-subtle">
+                  <th className="text-left py-2 pr-4 font-medium text-carbon-light">Date</th>
+                  <th className="text-left py-2 pr-4 font-medium text-carbon-light">Invoice</th>
+                  <th className="text-left py-2 pr-4 font-medium text-carbon-light">Description</th>
+                  <th className="text-right py-2 pr-4 font-medium text-carbon-light">Amount</th>
+                  <th className="text-left py-2 pr-4 font-medium text-carbon-light">Status</th>
+                  <th className="text-right py-2 font-medium text-carbon-light"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => (
+                  <tr key={inv.id} className="border-b border-border-subtle/50 hover:bg-white/[0.02]">
+                    <td className="py-2.5 pr-4 text-offwhite">
+                      {new Date(inv.created * 1000).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="py-2.5 pr-4 text-carbon-light font-mono">
+                      {inv.number ?? "—"}
+                    </td>
+                    <td className="py-2.5 pr-4 text-carbon-light max-w-[200px] truncate">
+                      {inv.description ?? "—"}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right text-offwhite font-medium">
+                      ${(inv.amountPaid / 100).toFixed(2)}
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        inv.status === "paid"
+                          ? "bg-green-500/15 text-green-400"
+                          : inv.status === "open"
+                            ? "bg-yellow-500/15 text-yellow-400"
+                            : inv.status === "void"
+                              ? "bg-carbon/15 text-carbon-light"
+                              : "bg-red-500/15 text-red-400"
+                      }`}>
+                        {inv.status === "paid" ? "Paid" : inv.status === "open" ? "Open" : inv.status === "void" ? "Void" : inv.status ?? "—"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {inv.invoicePdf && (
+                          <a
+                            href={inv.invoicePdf}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-surface transition-colors"
+                            title="Download PDF"
+                          >
+                            <Download className="w-3 h-3 text-carbon-light hover:text-offwhite" />
+                          </a>
+                        )}
+                        {inv.hostedInvoiceUrl && (
+                          <a
+                            href={inv.hostedInvoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-surface transition-colors"
+                            title="View invoice"
+                          >
+                            <ExternalLink className="w-3 h-3 text-carbon-light hover:text-offwhite" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

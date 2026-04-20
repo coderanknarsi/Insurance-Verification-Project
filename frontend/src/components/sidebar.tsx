@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Settings,
   CreditCard,
+  Users,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -22,6 +23,7 @@ interface SidebarProps {
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "verifications", label: "Verifications", icon: ShieldCheck },
+  { id: "team", label: "Team", icon: Users },
   { id: "billing", label: "Billing", icon: CreditCard },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -31,7 +33,7 @@ export function Sidebar({ userEmail, onSignOut, activeNav = "dashboard", onNavCh
 
   return (
     <aside
-      className={`flex flex-col h-screen bg-sidebar-bg border-r border-border-subtle transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${
+      className={`flex flex-col h-screen sticky top-0 bg-sidebar-bg border-r border-border-subtle transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${
         collapsed ? "w-[68px]" : "w-[240px]"
       }`}
     >

@@ -3,26 +3,29 @@ import { Timestamp } from "firebase-admin/firestore";
 import { collections } from "../config/firestore";
 import { requireAuth, requireRole, requireOrg } from "../middleware/auth";
 import { logAudit } from "../services/audit";
-import { measureOneClient } from "../services/measureone";
 import { UserRole } from "../types/user";
-import { PolicyStatus, DashboardStatus } from "../types/policy";
+import { PolicyStatus, DashboardStatus, ComplianceIssue, Policy } from "../types/policy";
 import { AuditAction, AuditEntityType } from "../types/audit";
+import { Borrower, SmsConsentStatus } from "../types/borrower";
 
 interface CsvRow {
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   loanNumber: string;
   vin: string;
-  make: string;
-  model: string;
-  year: number;
+  make?: string;
+  model?: string;
+  year?: number;
+  insuranceProvider?: string;
+  policyNumber?: string;
 }
 
 interface BulkImportInput {
   organizationId: string;
   rows: CsvRow[];
+  smsConsent?: boolean;
 }
 
 interface RowResult {
@@ -32,19 +35,50 @@ interface RowResult {
   borrowerId?: string;
   vehicleId?: string;
   error?: string;
+  warnings?: string[];
 }
 
-function validateRow(row: CsvRow, index: number): string | null {
-  if (!row.firstName || !row.lastName) return `Row ${index + 1}: firstName and lastName required.`;
-  if (!row.email) return `Row ${index + 1}: email required.`;
-  if (!row.phone) return `Row ${index + 1}: phone required.`;
-  if (!row.loanNumber) return `Row ${index + 1}: loanNumber required.`;
-  if (!row.vin) return `Row ${index + 1}: vin required.`;
-  if (!row.make || !row.model) return `Row ${index + 1}: make and model required.`;
-  if (!row.year || row.year < 1900 || row.year > new Date().getFullYear() + 2) {
-    return `Row ${index + 1}: invalid year.`;
+interface VinDecodeResult {
+  make: string;
+  model: string;
+  year: number;
+}
+
+/** Decode make/model/year from VIN using the free NHTSA vPIC API. */
+async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
+  try {
+    const url = `https://vpic.nhtsa.dot.gov/api/vehicles/decodevinvalues/${encodeURIComponent(vin)}?format=json`;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const json = await resp.json() as { Results?: Array<{ Make?: string; Model?: string; ModelYear?: string }> };
+    const r = json.Results?.[0];
+    if (!r || !r.Make || !r.Model || !r.ModelYear) return null;
+    const year = parseInt(r.ModelYear, 10);
+    if (isNaN(year)) return null;
+    return { make: r.Make, model: r.Model, year };
+  } catch {
+    return null;
   }
-  return null;
+}
+
+function validateRow(row: CsvRow, index: number): { error: string | null; warnings: string[] } {
+  const warnings: string[] = [];
+
+  // Hard requirements: name + VIN + loan number
+  if (!row.firstName || !row.lastName) return { error: `Row ${index + 1}: firstName and lastName required.`, warnings };
+  if (!row.loanNumber) return { error: `Row ${index + 1}: loanNumber required.`, warnings };
+  if (!row.vin) return { error: `Row ${index + 1}: vin required.`, warnings };
+
+  // Soft warnings
+  if (!row.email && !row.phone) {
+    warnings.push(`Row ${index + 1}: No email or phone — borrower cannot be contacted for verification.`);
+  } else if (!row.email) {
+    warnings.push(`Row ${index + 1}: No email provided.`);
+  } else if (!row.phone) {
+    warnings.push(`Row ${index + 1}: No phone provided.`);
+  }
+
+  return { error: null, warnings };
 }
 
 export const bulkImportDeals = onCall(
@@ -71,7 +105,7 @@ export const bulkImportDeals = onCall(
 
     for (let i = 0; i < data.rows.length; i++) {
       const row = data.rows[i];
-      const validationError = validateRow(row, i);
+      const { error: validationError, warnings } = validateRow(row, i);
 
       if (validationError) {
         results.push({
@@ -81,6 +115,18 @@ export const bulkImportDeals = onCall(
           error: validationError,
         });
         continue;
+      }
+
+      // Auto-fill make/model/year from VIN if missing
+      if (!row.make || !row.model || !row.year) {
+        const decoded = await decodeVin(row.vin);
+        if (decoded) {
+          if (!row.make) row.make = decoded.make;
+          if (!row.model) row.model = decoded.model;
+          if (!row.year) row.year = decoded.year;
+        } else if (!row.make || !row.model) {
+          warnings.push(`Row ${i + 1}: Could not decode vehicle info from VIN.`);
+        }
       }
 
       try {
@@ -96,43 +142,38 @@ export const bulkImportDeals = onCall(
 
         if (!existingBorrowerSnap.empty) {
           borrowerId = existingBorrowerSnap.docs[0].id;
-          await collections.borrowers.doc(borrowerId).update({
+          const updateData: Partial<Borrower> = {
             firstName: row.firstName,
             lastName: row.lastName,
-            email: row.email,
-            phone: row.phone,
             updatedAt: now,
-          });
+          };
+          if (row.email) updateData.email = row.email;
+          if (row.phone) updateData.phone = row.phone;
+          if (data.smsConsent && row.phone) {
+            updateData.smsConsentStatus = SmsConsentStatus.OPTED_IN;
+            updateData.smsOptInTimestamp = now;
+          }
+          await collections.borrowers.doc(borrowerId).update(updateData);
         } else {
           isNew = true;
           const ref = collections.borrowers.doc();
           borrowerId = ref.id;
-          await ref.set({
+          const borrowerData: Borrower = {
             organizationId: data.organizationId,
             firstName: row.firstName,
             lastName: row.lastName,
-            email: row.email,
-            phone: row.phone,
+            ...(row.email && { email: row.email }),
+            ...(row.phone && { phone: row.phone }),
             loanNumber: row.loanNumber,
+            ...(!row.email && !row.phone && { contactIncomplete: true }),
+            ...(data.smsConsent && row.phone && {
+              smsConsentStatus: SmsConsentStatus.OPTED_IN,
+              smsOptInTimestamp: now,
+            }),
             createdAt: now,
             updatedAt: now,
-          });
-
-          // Create MeasureOne individual (best-effort)
-          try {
-            const individual = await measureOneClient.createIndividual({
-              first_name: row.firstName,
-              last_name: row.lastName,
-              email: row.email,
-              phone: row.phone,
-            });
-            await collections.borrowers.doc(borrowerId).update({
-              measureOneIndividualId: individual.id,
-              updatedAt: Timestamp.now(),
-            });
-          } catch (err) {
-            console.error(`Row ${i + 1}: MeasureOne individual creation failed:`, err);
-          }
+          };
+          await ref.set(borrowerData);
         }
 
         // Upsert vehicle by VIN
@@ -146,13 +187,11 @@ export const bulkImportDeals = onCall(
 
         if (!existingVehicleSnap.empty) {
           vehicleId = existingVehicleSnap.docs[0].id;
-          await collections.vehicles.doc(vehicleId).update({
-            borrowerId,
-            make: row.make,
-            model: row.model,
-            year: row.year,
-            updatedAt: now,
-          });
+          const vehicleUpdate: Record<string, unknown> = { borrowerId, updatedAt: now };
+          if (row.make) vehicleUpdate.make = row.make;
+          if (row.model) vehicleUpdate.model = row.model;
+          if (row.year) vehicleUpdate.year = row.year;
+          await collections.vehicles.doc(vehicleId).update(vehicleUpdate);
         } else {
           const ref = collections.vehicles.doc();
           vehicleId = ref.id;
@@ -160,9 +199,9 @@ export const bulkImportDeals = onCall(
             borrowerId,
             organizationId: data.organizationId,
             vin: row.vin,
-            make: row.make,
-            model: row.model,
-            year: row.year,
+            make: row.make || "Unknown",
+            model: row.model || "Unknown",
+            year: row.year || 0,
             createdAt: now,
             updatedAt: now,
           });
@@ -176,15 +215,23 @@ export const bulkImportDeals = onCall(
           .get();
 
         if (existingPolicySnap.empty) {
-          await collections.policies.doc().set({
+          const hasCredentials = !!(row.insuranceProvider && row.policyNumber);
+          const policyData: Record<string, unknown> = {
             vehicleId,
             borrowerId,
             organizationId: data.organizationId,
             status: PolicyStatus.UNVERIFIED,
             dashboardStatus: DashboardStatus.RED,
+            complianceIssues: hasCredentials
+              ? [ComplianceIssue.UNVERIFIED]
+              : [ComplianceIssue.UNVERIFIED, ComplianceIssue.AWAITING_CREDENTIALS],
             createdAt: now,
             updatedAt: now,
-          });
+          };
+          if (row.insuranceProvider) policyData.insuranceProvider = row.insuranceProvider;
+          if (row.policyNumber) policyData.policyNumber = row.policyNumber;
+          if (!hasCredentials) policyData.awaitingCredentials = true;
+          await collections.policies.doc().set(policyData as unknown as Policy);
         }
 
         results.push({
@@ -193,6 +240,7 @@ export const bulkImportDeals = onCall(
           status: isNew ? "created" : "updated",
           borrowerId,
           vehicleId,
+          warnings: warnings.length > 0 ? warnings : undefined,
         });
       } catch (err) {
         results.push({
@@ -230,11 +278,14 @@ export const bulkImportDeals = onCall(
       },
     });
 
+    const totalWarnings = results.reduce((n, r) => n + (r.warnings?.length ?? 0), 0);
+
     return {
       total: data.rows.length,
       created: results.filter((r) => r.status === "created").length,
       updated: results.filter((r) => r.status === "updated").length,
       errors: results.filter((r) => r.status === "error").length,
+      warnings: totalWarnings,
       results,
     };
   }

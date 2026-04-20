@@ -1,9 +1,10 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { collections } from "../config/firestore";
-import { requireAuth, requireOrg } from "../middleware/auth";
+import { requireAuth, requireRole, requireOrg } from "../middleware/auth";
 import { logAudit } from "../services/audit";
 import { AuditAction, AuditEntityType } from "../types/audit";
+import { UserRole } from "../types/user";
 import type { ComplianceRules } from "../types/organization";
 
 const DEFAULT_RULES: ComplianceRules = {
@@ -49,6 +50,7 @@ export const updateComplianceRules = onCall(async (request) => {
     );
   }
 
+  requireRole(user, UserRole.ADMIN);
   requireOrg(user, data.organizationId);
 
   const orgDoc = await collections.organizations.doc(data.organizationId).get();

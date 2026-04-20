@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { collections } from "../config/firestore";
 import { requireAuth, requireOrg } from "../middleware/auth";
-import { DashboardStatus } from "../types/policy";
+import { DashboardStatus, PolicyStatus, ComplianceIssue } from "../types/policy";
 
 interface GetBorrowersInput {
   organizationId: string;
@@ -57,6 +57,11 @@ export const getBorrowers = onCall(async (request) => {
             .get();
 
           const policy = policySnap.empty ? null : policySnap.docs[0].data();
+
+          // Backfill complianceIssues for UNVERIFIED policies missing the field
+          if (policy && policy.status === PolicyStatus.UNVERIFIED && (!policy.complianceIssues || policy.complianceIssues.length === 0)) {
+            policy.complianceIssues = [ComplianceIssue.UNVERIFIED];
+          }
 
           return { ...vehicle, policy };
         })

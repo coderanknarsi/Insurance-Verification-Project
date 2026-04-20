@@ -6,6 +6,7 @@ import type { Vehicle } from "../types/vehicle";
 import type { Policy } from "../types/policy";
 import type { AuditLogEntry } from "../types/audit";
 import type { Notification } from "../types/notification";
+import type { Invite } from "../types/invite";
 
 const converter = <T extends { id?: string }>() => ({
   toFirestore: (data: T) => {
@@ -25,4 +26,5 @@ export const collections = {
   policies: db.collection("policies").withConverter(converter<Policy>()),
   auditLog: db.collection("auditLog").withConverter(converter<AuditLogEntry>()),
   notifications: db.collection("notifications").withConverter(converter<Notification>()),
+  invites: db.collection("invites").withConverter(converter<Invite>()),
 };

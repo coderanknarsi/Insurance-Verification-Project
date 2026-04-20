@@ -5,6 +5,7 @@ import { getStripe, stripeSecretKey, stripeWebhookSecret } from "../services/str
 import { getPlanByPriceId } from "../types/subscription";
 import type { StripeSubscriptionStatus } from "../types/subscription";
 import type Stripe from "stripe";
+import { sendAdminAlertEmail } from "../services/email";
 
 export const stripeWebhook = onRequest(
   {
@@ -194,6 +195,19 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     "stripe.status": "past_due",
     updatedAt: Timestamp.now(),
   });
+
+  // Look up org name for the alert
+  const orgDoc = await collections.organizations.doc(orgId).get();
+  const orgName = orgDoc.data()?.name ?? orgId;
+  const amount = invoice.amount_due ? `$${(invoice.amount_due / 100).toFixed(2)}` : "unknown";
+
+  sendAdminAlertEmail(
+    `Payment Failed — ${orgName}`,
+    "\u26a0\ufe0f Payment Failed",
+    `<p style="margin:0 0 8px;font-size:14px;color:#e2e8f0;"><strong>Organization:</strong> ${orgName}</p>
+     <p style="margin:0 0 8px;font-size:14px;color:#e2e8f0;"><strong>Amount:</strong> ${amount}</p>
+     <p style="margin:0;font-size:14px;color:#e2e8f0;"><strong>Customer ID:</strong> ${customerId}</p>`
+  ).catch((err) => console.error("Admin alert email failed:", err));
 
   console.log(`Payment failed for org ${orgId}`);
 }

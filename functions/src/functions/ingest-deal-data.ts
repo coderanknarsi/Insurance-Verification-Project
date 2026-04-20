@@ -3,25 +3,30 @@ import { Timestamp } from "firebase-admin/firestore";
 import { collections } from "../config/firestore";
 import { requireAuth, requireRole, requireOrg } from "../middleware/auth";
 import { logAudit } from "../services/audit";
-import { measureOneClient } from "../services/measureone";
 import { UserRole } from "../types/user";
-import { PolicyStatus, DashboardStatus } from "../types/policy";
+import { PolicyStatus, DashboardStatus, ComplianceIssue, Policy } from "../types/policy";
 import { AuditAction, AuditEntityType } from "../types/audit";
+import { SmsConsentStatus } from "../types/borrower";
 
 interface IngestDealDataInput {
   organizationId: string;
   borrower: {
     firstName: string;
     lastName: string;
-    email: string;
-    phone: string;
-    loanNumber: string;
+    email?: string;
+    phone?: string;
+    loanNumber?: string;
+    smsConsent?: boolean;
   };
   vehicle: {
     vin: string;
-    make: string;
-    model: string;
-    year: number;
+    make?: string;
+    model?: string;
+    year?: number;
+  };
+  insurance?: {
+    provider?: string;
+    policyNumber?: string;
   };
 }
 
@@ -30,20 +35,26 @@ function validateInput(data: IngestDealDataInput): void {
     throw new HttpsError("invalid-argument", "organizationId is required.");
   }
   const b = data.borrower;
-  if (!b || !b.firstName || !b.lastName || !b.email || !b.phone || !b.loanNumber) {
+  if (!b || !b.firstName || !b.lastName) {
     throw new HttpsError(
       "invalid-argument",
-      "borrower requires firstName, lastName, email, phone, and loanNumber."
+      "borrower requires firstName and lastName."
+    );
+  }
+  if (!b.email && !b.phone) {
+    throw new HttpsError(
+      "invalid-argument",
+      "borrower requires at least an email or phone number."
     );
   }
   const v = data.vehicle;
-  if (!v || !v.vin || !v.make || !v.model || !v.year) {
+  if (!v || !v.vin) {
     throw new HttpsError(
       "invalid-argument",
-      "vehicle requires vin, make, model, and year."
+      "vehicle requires vin."
     );
   }
-  if (typeof v.year !== "number" || v.year < 1900 || v.year > new Date().getFullYear() + 2) {
+  if (v.year && (typeof v.year !== "number" || v.year < 1900 || v.year > new Date().getFullYear() + 2)) {
     throw new HttpsError("invalid-argument", "vehicle.year is invalid.");
   }
 }
@@ -58,12 +69,14 @@ export const ingestDealData = onCall(async (request) => {
 
   const now = Timestamp.now();
 
-  // Check if borrower already exists by loanNumber within the org
-  const existingBorrowerSnap = await collections.borrowers
-    .where("organizationId", "==", data.organizationId)
-    .where("loanNumber", "==", data.borrower.loanNumber)
-    .limit(1)
-    .get();
+  // Check if borrower already exists by loanNumber within the org (only if loanNumber provided)
+  const existingBorrowerSnap = data.borrower.loanNumber
+    ? await collections.borrowers
+        .where("organizationId", "==", data.organizationId)
+        .where("loanNumber", "==", data.borrower.loanNumber)
+        .limit(1)
+        .get()
+    : { empty: true, docs: [] } as unknown as FirebaseFirestore.QuerySnapshot;
 
   let borrowerId: string;
   let isNewBorrower = false;
@@ -76,8 +89,12 @@ export const ingestDealData = onCall(async (request) => {
     await collections.borrowers.doc(borrowerId).update({
       firstName: data.borrower.firstName,
       lastName: data.borrower.lastName,
-      email: data.borrower.email,
-      phone: data.borrower.phone,
+      ...(data.borrower.email && { email: data.borrower.email }),
+      ...(data.borrower.phone && { phone: data.borrower.phone }),
+      ...(data.borrower.smsConsent !== undefined && data.borrower.phone && {
+        smsConsentStatus: data.borrower.smsConsent ? SmsConsentStatus.OPTED_IN : SmsConsentStatus.NOT_SET,
+        ...(data.borrower.smsConsent && { smsOptInTimestamp: now }),
+      }),
       updatedAt: now,
     });
 
@@ -100,9 +117,14 @@ export const ingestDealData = onCall(async (request) => {
       organizationId: data.organizationId,
       firstName: data.borrower.firstName,
       lastName: data.borrower.lastName,
-      email: data.borrower.email,
-      phone: data.borrower.phone,
-      loanNumber: data.borrower.loanNumber,
+      ...(data.borrower.email && { email: data.borrower.email }),
+      ...(data.borrower.phone && { phone: data.borrower.phone }),
+      ...(!data.borrower.email && !data.borrower.phone && { contactIncomplete: true }),
+      ...(data.borrower.loanNumber && { loanNumber: data.borrower.loanNumber }),
+      ...(data.borrower.smsConsent && data.borrower.phone && {
+        smsConsentStatus: SmsConsentStatus.OPTED_IN,
+        smsOptInTimestamp: now,
+      }),
       createdAt: now,
       updatedAt: now,
     });
@@ -115,26 +137,6 @@ export const ingestDealData = onCall(async (request) => {
       performedBy: uid,
       newValue: data.borrower as unknown as Record<string, unknown>,
     });
-  }
-
-  // Create MeasureOne individual for new borrowers
-  if (isNewBorrower) {
-    try {
-      const individual = await measureOneClient.createIndividual({
-        first_name: data.borrower.firstName,
-        last_name: data.borrower.lastName,
-        email: data.borrower.email,
-        phone: data.borrower.phone,
-      });
-
-      await collections.borrowers.doc(borrowerId).update({
-        measureOneIndividualId: individual.id,
-        updatedAt: Timestamp.now(),
-      });
-    } catch (err) {
-      // Log but don't fail — MeasureOne individual can be created later
-      console.error("Failed to create MeasureOne individual:", err);
-    }
   }
 
   // Check if vehicle already exists by VIN within the org
@@ -153,9 +155,9 @@ export const ingestDealData = onCall(async (request) => {
     // Update existing vehicle and reassign to this borrower
     await collections.vehicles.doc(vehicleId).update({
       borrowerId,
-      make: data.vehicle.make,
-      model: data.vehicle.model,
-      year: data.vehicle.year,
+      ...(data.vehicle.make && { make: data.vehicle.make }),
+      ...(data.vehicle.model && { model: data.vehicle.model }),
+      ...(data.vehicle.year && { year: data.vehicle.year }),
       updatedAt: now,
     });
 
@@ -177,9 +179,9 @@ export const ingestDealData = onCall(async (request) => {
       borrowerId,
       organizationId: data.organizationId,
       vin: data.vehicle.vin,
-      make: data.vehicle.make,
-      model: data.vehicle.model,
-      year: data.vehicle.year,
+      make: data.vehicle.make || "Unknown",
+      model: data.vehicle.model || "Unknown",
+      year: data.vehicle.year || 0,
       createdAt: now,
       updatedAt: now,
     });
@@ -207,15 +209,23 @@ export const ingestDealData = onCall(async (request) => {
     const policyRef = collections.policies.doc();
     policyId = policyRef.id;
 
-    await policyRef.set({
+    const hasCredentials = !!(data.insurance?.provider && data.insurance?.policyNumber);
+    const policyData: Record<string, unknown> = {
       vehicleId,
       borrowerId,
       organizationId: data.organizationId,
       status: PolicyStatus.UNVERIFIED,
       dashboardStatus: DashboardStatus.RED,
+      complianceIssues: hasCredentials
+        ? [ComplianceIssue.UNVERIFIED]
+        : [ComplianceIssue.UNVERIFIED, ComplianceIssue.AWAITING_CREDENTIALS],
       createdAt: now,
       updatedAt: now,
-    });
+    };
+    if (data.insurance?.provider) policyData.insuranceProvider = data.insurance.provider;
+    if (data.insurance?.policyNumber) policyData.policyNumber = data.insurance.policyNumber;
+    if (!hasCredentials) policyData.awaitingCredentials = true;
+    await policyRef.set(policyData as unknown as Policy);
 
     await logAudit({
       organizationId: data.organizationId,

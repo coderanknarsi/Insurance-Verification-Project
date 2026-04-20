@@ -11,18 +11,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge, StatusDot } from "@/components/status-badge";
-import { SendVerificationDialog } from "@/components/send-verification-dialog";
-import { VerifyNowDialog } from "@/components/verify-now-dialog";
 import { callGetBorrowers } from "@/lib/api";
 import type { BorrowerWithVehicles } from "@/lib/api";
-import { Search, Send } from "lucide-react";
+import { Search, Send, Upload, UserPlus, Loader2, X } from "lucide-react";
+import { ImportDialog } from "@/components/import-dialog";
+import { AddBorrowerDialog } from "@/components/add-borrower-dialog";
+import { callRequestBorrowerIntake } from "@/lib/api";
+import { toast } from "sonner";
 
-type StatusFilter = "ALL" | "GREEN" | "YELLOW" | "RED";
+export type StatusFilter = "ALL" | "GREEN" | "YELLOW" | "RED" | "ACTION_REQUIRED" | "AWAITING_INFO";
 
 interface BorrowerTableProps {
   organizationId: string;
   onSelectBorrower?: (borrower: BorrowerWithVehicles) => void;
   onBorrowersLoaded?: (borrowers: BorrowerWithVehicles[]) => void;
+  externalFilter?: StatusFilter;
+  onFilterChange?: (filter: StatusFilter) => void;
+  refreshKey?: number;
 }
 
 const filterTabs: { value: StatusFilter; label: string; dotColor?: string }[] = [
@@ -30,6 +35,7 @@ const filterTabs: { value: StatusFilter; label: string; dotColor?: string }[] = 
   { value: "GREEN", label: "Compliant", dotColor: "bg-green-400" },
   { value: "YELLOW", label: "At Risk", dotColor: "bg-yellow-400" },
   { value: "RED", label: "Non-Compliant", dotColor: "bg-red-400" },
+  { value: "AWAITING_INFO", label: "Awaiting Info", dotColor: "bg-orange-400" },
 ];
 
 const ISSUE_LABELS: Record<string, string> = {
@@ -44,31 +50,41 @@ const ISSUE_LABELS: Record<string, string> = {
   VEHICLE_REMOVED: "Removed",
   COVERAGE_EXPIRED: "Coverage Expired",
   EXPIRING_SOON: "Expiring Soon",
-  UNVERIFIED: "Unverified",
+  UNVERIFIED: "Pending Verification",
+  AWAITING_CREDENTIALS: "Awaiting Info",
 };
 
 function formatDate(dateStr?: string): string {
   if (!dateStr) return "—";
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function daysUntil(dateStr?: string): number | null {
   if (!dateStr) return null;
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + "T00:00:00");
   const now = new Date();
   return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoaded }: BorrowerTableProps) {
+export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoaded, externalFilter, onFilterChange, refreshKey }: BorrowerTableProps) {
   const [borrowers, setBorrowers] = useState<BorrowerWithVehicles[]>([]);
-  const [filter, setFilter] = useState<StatusFilter>("ALL");
+  const [internalFilter, setInternalFilter] = useState<StatusFilter>("ALL");
+  const filter = externalFilter ?? internalFilter;
+  const setFilter = (f: StatusFilter) => {
+    setInternalFilter(f);
+    onFilterChange?.(f);
+  };
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [lastId, setLastId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [importOpen, setImportOpen] = useState(false);
+  const [addBorrowerOpen, setAddBorrowerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const fetchBorrowers = useCallback(
     async (startAfter?: string) => {
@@ -83,18 +99,27 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
       try {
         const res = await callGetBorrowers({
           organizationId,
-          dashboardStatus: filter === "ALL" ? undefined : filter,
+          dashboardStatus: filter === "ALL" || filter === "ACTION_REQUIRED" || filter === "AWAITING_INFO" ? undefined : filter,
           limit: 50,
           startAfter,
         });
         const data = res.data;
 
+        // For ACTION_REQUIRED, filter to only YELLOW + RED client-side
+        // For AWAITING_INFO, filter to borrowers with awaitingCredentials policies
+        const results = filter === "ACTION_REQUIRED"
+          ? data.borrowers.filter((b: BorrowerWithVehicles) => b.overallStatus === "YELLOW" || b.overallStatus === "RED")
+          : filter === "AWAITING_INFO"
+            ? data.borrowers.filter((b: BorrowerWithVehicles) =>
+                b.vehicles.some((v) => v.policy?.awaitingCredentials === true))
+            : data.borrowers;
+
         if (isInitial) {
-          setBorrowers(data.borrowers);
+          setBorrowers(results);
           setSelectedIds(new Set());
-          onBorrowersLoaded?.(data.borrowers);
+          onBorrowersLoaded?.(results);
         } else {
-          const merged = [...borrowers, ...data.borrowers];
+          const merged = [...borrowers, ...results];
           setBorrowers(merged);
           onBorrowersLoaded?.(merged);
         }
@@ -113,7 +138,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
   useEffect(() => {
     if (!organizationId) return;
     fetchBorrowers();
-  }, [fetchBorrowers, organizationId]);
+  }, [fetchBorrowers, organizationId, refreshKey]);
 
   const handleLoadMore = () => {
     if (lastId) fetchBorrowers(lastId);
@@ -136,18 +161,72 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
     }
   };
 
+  const [bulkVerifying, setBulkVerifying] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; errored: number; lastError: string } | null>(null);
+
+  const handleBulkVerify = async () => {
+    // Verification is now handled automatically by the Data Feed Engine
+    // No manual bulk verify needed
+  };
+
   return (
     <div className="bg-card-bg border border-border-subtle rounded-xl overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-6 py-4 border-b border-border-subtle">
         <div className="flex items-center gap-3">
-          <Search className="w-4 h-4 text-carbon-light" />
-          <h2 className="text-sm font-semibold text-offwhite">Borrowers</h2>
-          <span className="text-xs font-mono text-carbon-light bg-surface px-2 py-0.5 rounded-full">
-            {borrowers.length}
-          </span>
+          {searchOpen ? (
+            <div className="flex items-center gap-2 bg-surface border border-border-subtle rounded-lg px-3 py-1.5 min-w-[240px]">
+              <Search className="w-3.5 h-3.5 text-carbon-light flex-shrink-0" />
+              <input
+                autoFocus
+                type="text"
+                placeholder="Search name, email, loan #, VIN..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent text-sm text-offwhite placeholder:text-carbon-light outline-none w-full"
+              />
+              <button
+                onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+                className="text-carbon-light hover:text-offwhite transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="text-carbon-light hover:text-offwhite transition-colors"
+                title="Search borrowers"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+              <h2 className="text-sm font-semibold text-offwhite">Borrowers</h2>
+              <span className="text-xs font-mono text-carbon-light bg-surface px-2 py-0.5 rounded-full">
+                {borrowers.length}
+              </span>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
+          {/* Add Borrower button */}
+          <Button
+            size="sm"
+            onClick={() => setAddBorrowerOpen(true)}
+            className="bg-accent hover:bg-accent-hover text-white border-0 text-xs h-7 px-3"
+          >
+            <UserPlus className="w-3 h-3 mr-1.5" />
+            Add Borrower
+          </Button>
+          {/* Import button */}
+          <Button
+            size="sm"
+            onClick={() => setImportOpen(true)}
+            className="bg-surface border border-border-subtle text-carbon-light hover:text-offwhite hover:bg-white/[0.04] text-xs h-7 px-3"
+          >
+            <Upload className="w-3 h-3 mr-1.5" />
+            Import CSV
+          </Button>
           {/* Bulk actions */}
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2">
@@ -156,14 +235,29 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
               </span>
               <Button
                 size="sm"
+                onClick={handleBulkVerify}
+                disabled={bulkVerifying}
                 className="bg-accent hover:bg-accent-hover text-white text-xs h-7 px-3"
               >
-                <Send className="w-3 h-3 mr-1" />
-                Bulk Verify
+                {bulkVerifying ? (
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                ) : (
+                  <Send className="w-3 h-3 mr-1" />
+                )}
+                {bulkVerifying ? "Sending..." : "Bulk Verify"}
               </Button>
             </div>
           )}
           <div className="flex gap-1 bg-surface rounded-lg p-1">
+            {filter === "ACTION_REQUIRED" && (
+              <button
+                key="action"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-orange-500/15 text-orange-400"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                Needs Attention
+              </button>
+            )}
             {filterTabs.map((tab) => (
               <button
                 key={tab.value}
@@ -171,7 +265,9 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 ${
                   filter === tab.value
                     ? "bg-accent/15 text-accent"
-                    : "text-carbon-light hover:text-offwhite"
+                    : filter === "ACTION_REQUIRED" && tab.value === "ALL"
+                      ? "text-carbon-light hover:text-offwhite"
+                      : "text-carbon-light hover:text-offwhite"
                 }`}
               >
                 {tab.dotColor && (
@@ -183,6 +279,22 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
           </div>
         </div>
       </div>
+
+      {/* Bulk verify result banner */}
+      {bulkResult && (
+        <div className={`px-6 py-2 text-xs font-medium ${
+          bulkResult.skipped === 0 && bulkResult.errored === 0
+            ? "bg-green-500/10 text-green-400"
+            : bulkResult.errored > 0
+              ? "bg-red-500/10 text-red-400"
+              : "bg-yellow-500/10 text-yellow-400"
+        }`}>
+          Sent {bulkResult.sent} verification email{bulkResult.sent !== 1 ? "s" : ""}
+          {bulkResult.skipped > 0 && ` · ${bulkResult.skipped} skipped (missing email or vehicle)`}
+          {bulkResult.errored > 0 && ` · ${bulkResult.errored} failed`}
+          {bulkResult.lastError && ` — ${bulkResult.lastError}`}
+        </div>
+      )}
 
       {/* Content */}
       <div className="px-0">
@@ -204,12 +316,39 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
             </Button>
           </div>
         ) : borrowers.length === 0 ? (
-          <div className="flex items-center justify-center py-16">
-            <p className="text-sm text-carbon-light">
-              {filter === "ALL"
-                ? "No borrowers found. Import borrowers to get started."
-                : `No ${filterTabs.find((t) => t.value === filter)?.label?.toLowerCase()} borrowers.`}
-            </p>
+          <div className="flex flex-col items-center justify-center gap-4 py-16">
+            <Upload className="w-8 h-8 text-carbon-light" />
+            <div className="text-center">
+              <p className="text-sm text-offwhite font-medium">
+                {filter === "ALL"
+                  ? "No borrowers yet"
+                  : `No ${filterTabs.find((t) => t.value === filter)?.label?.toLowerCase()} borrowers`}
+              </p>
+              {filter === "ALL" && (
+                <p className="text-xs text-carbon-light mt-1">Import a CSV to add your client base</p>
+              )}
+            </div>
+            {filter === "ALL" && (
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => setAddBorrowerOpen(true)}
+                  className="bg-accent hover:bg-accent-hover text-white border-0"
+                >
+                  <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                  Add Borrower
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setImportOpen(true)}
+                  className="bg-transparent border-border-subtle text-carbon-light hover:text-offwhite"
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1.5" />
+                  Import CSV
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -236,7 +375,17 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {borrowers.map((borrower) => {
+                {borrowers.filter((b) => {
+                  if (!searchQuery.trim()) return true;
+                  const q = searchQuery.toLowerCase();
+                  const name = `${b.firstName} ${b.lastName}`.toLowerCase();
+                  const loan = (b.loanNumber ?? "").toLowerCase();
+                  const email = (b.email ?? "").toLowerCase();
+                  const v = b.vehicles[0];
+                  const vin = (v?.vin ?? "").toLowerCase();
+                  const vehicle = v ? `${v.year} ${v.make} ${v.model}`.toLowerCase() : "";
+                  return name.includes(q) || loan.includes(q) || email.includes(q) || vin.includes(q) || vehicle.includes(q);
+                }).map((borrower) => {
                   const vehicle = borrower.vehicles[0];
                   const policy = vehicle?.policy;
                   const issues = policy?.complianceIssues ?? [];
@@ -309,7 +458,11 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                             {issues.slice(0, 2).map((issue) => (
                               <span
                                 key={issue}
-                                className="inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20"
+                                className={`inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                                  issue === "UNVERIFIED"
+                                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                    : "bg-red-500/10 text-red-400 border-red-500/20"
+                                }`}
                               >
                                 {ISSUE_LABELS[issue] ?? issue}
                               </span>
@@ -325,27 +478,35 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                         )}
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        {vehicle ? (
-                          <div className="flex justify-end gap-1">
-                            <SendVerificationDialog
-                              organizationId={organizationId}
-                              borrowerId={borrower.id}
-                              vehicleId={vehicle.id}
-                              borrowerName={`${borrower.firstName} ${borrower.lastName}`}
-                              borrowerEmail={borrower.email}
-                              borrowerPhone={borrower.phone}
-                              vehicleLabel={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                            />
-                            <VerifyNowDialog
-                              organizationId={organizationId}
-                              borrowerId={borrower.id}
-                              vehicleId={vehicle.id}
-                              borrowerName={`${borrower.firstName} ${borrower.lastName}`}
-                              vehicleLabel={`${vehicle.year} ${vehicle.make} ${vehicle.model}`}
-                            />
-                          </div>
+                        {policy?.awaitingCredentials ? (
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              if (!vehicle) return;
+                              try {
+                                const res = await callRequestBorrowerIntake({
+                                  organizationId: borrower.organizationId,
+                                  borrowerId: borrower.id,
+                                  vehicleId: vehicle.id,
+                                  policyId: policy.id,
+                                });
+                                if (res.data.delivered) {
+                                  const method = res.data.deliveryMethod === "both" ? "text & email" : res.data.deliveryMethod === "sms" ? "text message" : "email";
+                                  toast.success(`Request sent via ${method} to ${borrower.firstName} ${borrower.lastName}`);
+                                } else {
+                                  toast.warning(`Link created but delivery failed: ${res.data.deliveryError ?? "Unknown error"}. Link: ${res.data.intakeUrl}`);
+                                }
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Failed to send intake request");
+                              }
+                            }}
+                            className="bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border-0 text-xs h-6 px-2"
+                          >
+                            <Send className="w-3 h-3 mr-1" />
+                            Request Info
+                          </Button>
                         ) : (
-                          <span className="text-carbon">—</span>
+                          <span className="text-xs text-carbon-light">Auto-verified</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -368,6 +529,22 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
           </>
         )}
       </div>
+
+      {/* Import Dialog */}
+      <ImportDialog
+        organizationId={organizationId}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImportComplete={() => fetchBorrowers()}
+      />
+
+      {/* Add Borrower Dialog */}
+      <AddBorrowerDialog
+        organizationId={organizationId}
+        open={addBorrowerOpen}
+        onClose={() => setAddBorrowerOpen(false)}
+        onComplete={() => fetchBorrowers()}
+      />
     </div>
   );
 }

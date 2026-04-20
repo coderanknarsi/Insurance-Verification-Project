@@ -3,8 +3,13 @@
 import { useEffect, useState } from "react";
 import { Settings, Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { callGetComplianceRules, callUpdateComplianceRules } from "@/lib/api";
-import type { ComplianceRules } from "@/lib/api";
+import {
+  callGetComplianceRules,
+  callGetOrganizationProfile,
+  callUpdateComplianceRules,
+  callUpdateOrganizationProfile,
+} from "@/lib/api";
+import type { ComplianceRules, OrganizationProfile, OrganizationType } from "@/lib/api";
 
 interface ComplianceSettingsProps {
   organizationId: string;
@@ -15,30 +20,44 @@ function Toggle({
   description,
   checked,
   onChange,
+  onLabel = "Required",
+  offLabel = "Not Required",
 }: {
   label: string;
   description: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  onLabel?: string;
+  offLabel?: string;
 }) {
   return (
-    <div className="flex items-start justify-between py-3">
-      <div>
+    <div className="flex items-center justify-between py-3">
+      <div className="mr-4">
         <p className="text-sm text-offwhite font-medium">{label}</p>
         <p className="text-xs text-carbon-light mt-0.5">{description}</p>
       </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={`relative w-10 h-5 rounded-full transition-colors ${
-          checked ? "bg-accent" : "bg-surface border border-border-subtle"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-            checked ? "translate-x-5" : "translate-x-0.5"
+      <div className="flex-shrink-0 flex rounded-lg bg-surface border border-border-subtle overflow-hidden">
+        <button
+          onClick={() => onChange(false)}
+          className={`px-3 py-1.5 text-xs font-medium transition-all ${
+            !checked
+              ? "bg-red-500/15 text-red-400 border-r border-red-500/20"
+              : "text-carbon-light hover:text-offwhite border-r border-border-subtle"
           }`}
-        />
-      </button>
+        >
+          {offLabel}
+        </button>
+        <button
+          onClick={() => onChange(true)}
+          className={`px-3 py-1.5 text-xs font-medium transition-all ${
+            checked
+              ? "bg-green-500/15 text-green-400"
+              : "text-carbon-light hover:text-offwhite"
+          }`}
+        >
+          {onLabel}
+        </button>
+      </div>
     </div>
   );
 }
@@ -82,24 +101,55 @@ function NumberInput({
 export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) {
   const [rules, setRules] = useState<ComplianceRules | null>(null);
   const [original, setOriginal] = useState<ComplianceRules | null>(null);
+  const [profile, setProfile] = useState<OrganizationProfile | null>(null);
+  const [originalProfile, setOriginalProfile] = useState<OrganizationProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState(false);
 
   useEffect(() => {
     if (!organizationId) return;
     setLoading(true);
-    callGetComplianceRules({ organizationId })
-      .then((res) => {
-        setRules(res.data);
-        setOriginal(res.data);
+    Promise.all([
+      callGetOrganizationProfile({ organizationId }),
+      callGetComplianceRules({ organizationId }),
+    ])
+      .then(([profileRes, rulesRes]) => {
+        setProfile(profileRes.data);
+        setOriginalProfile(profileRes.data);
+        setRules(rulesRes.data);
+        setOriginal(rulesRes.data);
       })
       .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load rules")
+        setError(err instanceof Error ? err.message : "Failed to load settings")
       )
       .finally(() => setLoading(false));
   }, [organizationId]);
+
+  const handleSaveProfile = async () => {
+    if (!profile) return;
+    setSavingProfile(true);
+    setError(null);
+    setProfileSuccess(false);
+    try {
+      const res = await callUpdateOrganizationProfile({
+        organizationId,
+        name: profile.name,
+        type: profile.type,
+      });
+      setProfile({ name: res.data.name, type: res.data.type });
+      setOriginalProfile({ name: res.data.name, type: res.data.type });
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save organization profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!rules) return;
@@ -122,7 +172,12 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
     if (original) setRules({ ...original });
   };
 
+  const handleProfileReset = () => {
+    if (originalProfile) setProfile({ ...originalProfile });
+  };
+
   const isDirty = JSON.stringify(rules) !== JSON.stringify(original);
+  const isProfileDirty = JSON.stringify(profile) !== JSON.stringify(originalProfile);
 
   if (loading) {
     return (
@@ -135,10 +190,10 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
     );
   }
 
-  if (!rules) {
+  if (!rules || !profile) {
     return (
       <div className="bg-card-bg border border-red-500/20 rounded-xl p-4">
-        <p className="text-sm text-red-400">{error ?? "No rules available"}</p>
+        <p className="text-sm text-red-400">{error ?? "No settings available"}</p>
       </div>
     );
   }
@@ -148,6 +203,80 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
 
   return (
     <div className="max-w-2xl space-y-6">
+      <div className="bg-card-bg border border-border-subtle rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xs font-semibold text-offwhite uppercase tracking-wider mb-1">
+              Organization Profile
+            </h3>
+            <p className="text-xs text-carbon-light">
+              Borrower emails and intake links use this company name.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isProfileDirty && (
+              <Button
+                onClick={handleProfileReset}
+                variant="outline"
+                size="sm"
+                className="bg-surface border-border-subtle text-carbon-light hover:text-offwhite text-xs h-8"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                Reset
+              </Button>
+            )}
+            <Button
+              onClick={handleSaveProfile}
+              disabled={!isProfileDirty || savingProfile}
+              size="sm"
+              className="bg-accent hover:bg-accent-hover text-white text-xs h-8"
+            >
+              <Save className="w-3 h-3 mr-1" />
+              {savingProfile ? "Saving..." : "Save Profile"}
+            </Button>
+          </div>
+        </div>
+
+        {profileSuccess && (
+          <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-2 mb-4">
+            <p className="text-xs text-green-400">Organization profile saved successfully</p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-offwhite font-medium">Company Name</p>
+            <p className="text-xs text-carbon-light mt-0.5 mb-2">
+              This appears in borrower outreach, including intake emails.
+            </p>
+            <input
+              type="text"
+              value={profile.name}
+              onChange={(e) => setProfile((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+              placeholder="Acme Auto Finance"
+              className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm text-offwhite placeholder:text-carbon focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+            />
+          </div>
+
+          <div>
+            <p className="text-sm text-offwhite font-medium">Organization Type</p>
+            <p className="text-xs text-carbon-light mt-0.5 mb-2">
+              Use the type that best matches your business.
+            </p>
+            <select
+              value={profile.type}
+              onChange={(e) => setProfile((prev) => (prev ? { ...prev, type: e.target.value as OrganizationType } : prev))}
+              className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm text-offwhite focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+            >
+              <option value="BHPH_DEALER">BHPH Dealer</option>
+              <option value="BANK">Bank</option>
+              <option value="CREDIT_UNION">Credit Union</option>
+              <option value="FINANCE_COMPANY">Finance Company</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -289,6 +418,8 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
             description="Automatically notify borrowers when their policy is about to expire"
             checked={rules.autoSendReminder}
             onChange={(v) => update({ autoSendReminder: v })}
+            onLabel="Enabled"
+            offLabel="Disabled"
           />
           {rules.autoSendReminder && (
             <NumberInput

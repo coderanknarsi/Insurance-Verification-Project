@@ -31,6 +31,7 @@ export enum ComplianceIssue {
   COVERAGE_EXPIRED = "COVERAGE_EXPIRED",
   EXPIRING_SOON = "EXPIRING_SOON",
   UNVERIFIED = "UNVERIFIED",
+  AWAITING_CREDENTIALS = "AWAITING_CREDENTIALS",
 }
 
 export interface CoveragePeriod {
@@ -104,7 +105,6 @@ export interface Policy {
   vehicleId: string;
   borrowerId: string;
   organizationId: string;
-  measureOneDataRequestId?: string;
   status: PolicyStatus;
   policyNumber?: string;
   policyTypes?: string[];
@@ -123,7 +123,12 @@ export interface Policy {
   vehicleRemovedFromPolicy?: boolean;
   complianceIssues?: ComplianceIssue[];
   dashboardStatus: DashboardStatus;
+  awaitingCredentials?: boolean;
+  insuranceCardUrl?: string;
   lastVerifiedAt?: Timestamp;
+  lastVerificationAttempt?: Timestamp;
+  lastVerificationError?: string;
+  manualReviewRequired?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

@@ -1,12 +1,16 @@
 "use client";
 
-import { X, Shield, Car, FileText, AlertTriangle, Clock, Phone, Mail, User } from "lucide-react";
+import { useState } from "react";
+import { X, Shield, Car, FileText, AlertTriangle, Clock, Phone, Mail, User, Pencil, Trash2, Check, Loader2, MessageSquare, Image } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
+import { callUpdateBorrower, callDeleteBorrower } from "@/lib/api";
 import type { BorrowerWithVehicles, PolicyData } from "@/lib/api";
 
 interface BorrowerDetailPanelProps {
   borrower: BorrowerWithVehicles;
   onClose: () => void;
+  onUpdated?: () => void;
+  onDeleted?: () => void;
 }
 
 const ISSUE_LABELS: Record<string, string> = {
@@ -21,12 +25,25 @@ const ISSUE_LABELS: Record<string, string> = {
   VEHICLE_REMOVED: "Vehicle removed from policy",
   COVERAGE_EXPIRED: "Coverage period has expired",
   EXPIRING_SOON: "Policy expiring soon",
-  UNVERIFIED: "Insurance not yet verified",
+  UNVERIFIED: "Pending deep verification",
+  AWAITING_CREDENTIALS: "Awaiting insurance info from borrower",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Active",
+  EXPIRED: "Expired",
+  PENDING_ACTIVATION: "Pending Verification",
+  PENDING_CANCELLATION: "Pending Cancellation",
+  PENDING_EXPIRATION: "Pending Expiration",
+  CANCELLED: "Cancelled",
+  UNVERIFIED: "Unverified",
+  RESCINDED: "Rescinded",
+  NOT_AVAILABLE: "Not Available",
 };
 
 function formatDate(dateStr?: string): string {
   if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -164,7 +181,7 @@ function PolicySection({ policy }: { policy: PolicyData }) {
       {/* Policy Details — THIRD */}
       <Section title="Policy Details" icon={FileText}>
         <InfoRow label="Policy #" value={policy.policyNumber ?? "—"} />
-        <InfoRow label="Status" value={policy.status} />
+        <InfoRow label="Status" value={STATUS_LABELS[policy.status] ?? policy.status} />
         <InfoRow label="Insurer" value={policy.insuranceProvider ?? "—"} />
         {policy.insuranceProviderDetail?.naicCode && (
           <InfoRow label="NAIC Code" value={policy.insuranceProviderDetail.naicCode} />
@@ -197,10 +214,57 @@ function PolicySection({ policy }: { policy: PolicyData }) {
   );
 }
 
-export function BorrowerDetailPanel({ borrower, onClose }: BorrowerDetailPanelProps) {
+export function BorrowerDetailPanel({ borrower, onClose, onUpdated, onDeleted }: BorrowerDetailPanelProps) {
   const vehicle = borrower.vehicles[0];
   const policy = vehicle?.policy;
   const issues = policy?.complianceIssues ?? [];
+
+  // Edit state
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editFields, setEditFields] = useState({
+    firstName: borrower.firstName,
+    lastName: borrower.lastName,
+    email: borrower.email ?? "",
+    phone: borrower.phone ?? "",
+    smsConsentStatus: borrower.smsConsentStatus ?? "NOT_SET",
+  });
+
+  // Delete state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await callUpdateBorrower({
+        organizationId: borrower.organizationId,
+        borrowerId: borrower.id,
+        updates: editFields,
+      });
+      setEditing(false);
+      onUpdated?.();
+    } catch {
+      // stay in edit mode on error
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await callDeleteBorrower({
+        organizationId: borrower.organizationId,
+        borrowerId: borrower.id,
+      });
+      onDeleted?.();
+      onClose();
+    } catch {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   return (
     <div className="fixed inset-y-0 right-0 w-[420px] bg-card-bg border-l border-border-subtle shadow-2xl shadow-black/50 z-50 flex flex-col">
@@ -215,26 +279,176 @@ export function BorrowerDetailPanel({ borrower, onClose }: BorrowerDetailPanelPr
             <p className="text-xs text-carbon-light">{borrower.loanNumber}</p>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface transition-colors"
-        >
-          <X className="w-4 h-4 text-carbon-light" />
-        </button>
+        <div className="flex items-center gap-1">
+          {!editing && (
+            <button
+              onClick={() => setEditing(true)}
+              title="Edit borrower"
+              className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5 text-carbon-light" />
+            </button>
+          )}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            title="Delete borrower"
+            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-carbon-light hover:text-red-400" />
+          </button>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface transition-colors"
+          >
+            <X className="w-4 h-4 text-carbon-light" />
+          </button>
+        </div>
       </div>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="px-5 py-3 bg-red-500/10 border-b border-red-500/20">
+          <p className="text-xs text-red-400 font-medium mb-2">
+            Delete {borrower.firstName} {borrower.lastName}?
+          </p>
+          <p className="text-[10px] text-carbon-light mb-3">
+            This will permanently remove this borrower and all their vehicle, policy, and notification data.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {deleting && <Loader2 className="w-3 h-3 animate-spin" />}
+              {deleting ? "Deleting..." : "Yes, Delete"}
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-surface text-carbon-light hover:bg-border-subtle"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-0">
         {/* Contact info */}
         <Section title="Contact" icon={Mail}>
-          <div className="flex items-center gap-2 py-0.5">
-            <Mail className="w-3 h-3 text-carbon-light" />
-            <span className="text-xs text-offwhite">{borrower.email}</span>
-          </div>
-          <div className="flex items-center gap-2 py-0.5">
-            <Phone className="w-3 h-3 text-carbon-light" />
-            <span className="text-xs text-offwhite">{borrower.phone}</span>
-          </div>
+          {editing ? (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-carbon-light mb-0.5 block">First Name</label>
+                  <input
+                    value={editFields.firstName}
+                    onChange={(e) => setEditFields({ ...editFields, firstName: e.target.value })}
+                    className="w-full px-2 py-1.5 text-xs bg-surface border border-border-subtle rounded-md text-offwhite focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-carbon-light mb-0.5 block">Last Name</label>
+                  <input
+                    value={editFields.lastName}
+                    onChange={(e) => setEditFields({ ...editFields, lastName: e.target.value })}
+                    className="w-full px-2 py-1.5 text-xs bg-surface border border-border-subtle rounded-md text-offwhite focus:outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-carbon-light mb-0.5 block">Email</label>
+                <input
+                  value={editFields.email}
+                  onChange={(e) => setEditFields({ ...editFields, email: e.target.value })}
+                  type="email"
+                  className="w-full px-2 py-1.5 text-xs bg-surface border border-border-subtle rounded-md text-offwhite focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-carbon-light mb-0.5 block">Phone</label>
+                <input
+                  value={editFields.phone}
+                  onChange={(e) => setEditFields({ ...editFields, phone: e.target.value })}
+                  type="tel"
+                  className="w-full px-2 py-1.5 text-xs bg-surface border border-border-subtle rounded-md text-offwhite focus:outline-none focus:border-accent"
+                />
+              </div>
+              {editFields.phone && (
+                <div
+                  className="flex items-center justify-between px-2.5 py-2 rounded-md bg-surface border border-border-subtle cursor-pointer"
+                  onClick={() =>
+                    setEditFields({
+                      ...editFields,
+                      smsConsentStatus: editFields.smsConsentStatus === "OPTED_IN" ? "OPTED_OUT" : "OPTED_IN",
+                    })
+                  }
+                >
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-3.5 h-3.5 text-carbon-light" />
+                    <span className="text-xs text-offwhite">SMS Consent</span>
+                  </div>
+                  <div
+                    className={`w-8 h-[18px] rounded-full transition-colors relative ${
+                      editFields.smsConsentStatus === "OPTED_IN" ? "bg-accent" : "bg-border-subtle"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${
+                        editFields.smsConsentStatus === "OPTED_IN" ? "translate-x-[16px]" : "translate-x-[2px]"
+                      }`}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-white hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  {saving ? "Saving..." : "Save"}
+                </button>
+                <button
+                  onClick={() => {
+                    setEditing(false);
+                    setEditFields({
+                      firstName: borrower.firstName,
+                      lastName: borrower.lastName,
+                      email: borrower.email ?? "",
+                      phone: borrower.phone ?? "",
+                      smsConsentStatus: borrower.smsConsentStatus ?? "NOT_SET",
+                    });
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md bg-surface text-carbon-light hover:bg-border-subtle"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 py-0.5">
+                <Mail className="w-3 h-3 text-carbon-light" />
+                <span className="text-xs text-offwhite">{borrower.email || "—"}</span>
+              </div>
+              <div className="flex items-center gap-2 py-0.5">
+                <Phone className="w-3 h-3 text-carbon-light" />
+                <span className="text-xs text-offwhite">{borrower.phone || "—"}</span>
+              </div>
+              {borrower.phone && (
+                <div className="flex items-center gap-2 py-0.5">
+                  <MessageSquare className="w-3 h-3 text-carbon-light" />
+                  <span className={`text-xs ${borrower.smsConsentStatus === "OPTED_IN" ? "text-green-400" : "text-carbon-light"}`}>
+                    SMS {borrower.smsConsentStatus === "OPTED_IN" ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
         </Section>
 
         {/* Vehicle */}
@@ -257,20 +471,46 @@ export function BorrowerDetailPanel({ borrower, onClose }: BorrowerDetailPanelPr
         {issues.length > 0 && (
           <Section title="Compliance Issues" icon={AlertTriangle}>
             <div className="space-y-1.5">
-              {issues.map((issue) => (
-                <div
-                  key={issue}
-                  className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-red-500/5 border border-red-500/15"
-                >
-                  <AlertTriangle className="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-medium text-red-400">
-                      {ISSUE_LABELS[issue] ?? issue}
-                    </p>
+              {issues.map((issue) => {
+                const isInfo = issue === "UNVERIFIED";
+                return (
+                  <div
+                    key={issue}
+                    className={`flex items-start gap-2 px-2.5 py-2 rounded-lg ${
+                      isInfo
+                        ? "bg-blue-500/5 border border-blue-500/15"
+                        : "bg-red-500/5 border border-red-500/15"
+                    }`}
+                  >
+                    <AlertTriangle className={`w-3 h-3 mt-0.5 flex-shrink-0 ${
+                      isInfo ? "text-blue-400" : "text-red-400"
+                    }`} />
+                    <div>
+                      <p className={`text-xs font-medium ${
+                        isInfo ? "text-blue-400" : "text-red-400"
+                      }`}>
+                        {ISSUE_LABELS[issue] ?? issue}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+          </Section>
+        )}
+
+        {/* Insurance Card */}
+        {policy?.insuranceCardUrl && (
+          <Section title="Insurance Card" icon={Image}>
+            <a
+              href={policy.insuranceCardUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/20 hover:bg-accent/15 transition-colors"
+            >
+              <FileText className="w-4 h-4 text-accent flex-shrink-0" />
+              <span className="text-xs font-medium text-accent">View Uploaded Insurance Card</span>
+            </a>
           </Section>
         )}
 

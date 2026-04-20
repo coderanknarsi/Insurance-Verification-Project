@@ -25,7 +25,7 @@ service cloud.firestore {
     // Organizations: admins can read/write, others in org can read
     match /organizations/{orgId} {
       allow read: if belongsToOrg(orgId);
-      allow create: if request.auth != null;
+      allow create: if false; // Server-side only (onUserCreated function)
       allow update: if isOrgAdmin(orgId);
       allow delete: if false;
     }
@@ -34,7 +34,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null &&
         (request.auth.uid == userId || belongsToOrg(resource.data.organizationId));
-      allow create: if request.auth != null;
+      allow create: if false; // Server-side only (onUserCreated function)
       allow update: if request.auth.uid == userId ||
         isOrgAdmin(resource.data.organizationId);
       allow delete: if isOrgAdmin(resource.data.organizationId);
@@ -79,6 +79,12 @@ service cloud.firestore {
     // Notifications: org members can read, no client writes (server only)
     match /notifications/{notifId} {
       allow read: if belongsToOrg(resource.data.organizationId);
+      allow write: if false;
+    }
+
+    // Invites: server-side only (managed via Cloud Functions)
+    match /invites/{inviteId} {
+      allow read: if false;
       allow write: if false;
     }
   }

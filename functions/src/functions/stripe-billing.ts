@@ -5,6 +5,13 @@ import { requireAuth, requireOrg, requireRole } from "../middleware/auth";
 import { UserRole } from "../types/user";
 import { SubscriptionPlan, PLAN_CONFIG } from "../types/subscription";
 import { getStripe, getOrCreateStripeCustomer, stripeSecretKey } from "../services/stripe";
+import { DEMO_ORG_ID } from "../constants";
+
+function blockDemoOrg(organizationId: string): void {
+  if (organizationId === DEMO_ORG_ID) {
+    throw new HttpsError("permission-denied", "Billing is disabled for demo accounts. Sign up for your own free trial!");
+  }
+}
 
 export const createSubscription = onCall(
   { secrets: [stripeSecretKey] },
@@ -18,6 +25,7 @@ export const createSubscription = onCall(
 
     requireOrg(user, data.organizationId);
     requireRole(user, UserRole.ADMIN);
+    blockDemoOrg(data.organizationId);
 
     const plan = data.plan as SubscriptionPlan;
     const planConfig = PLAN_CONFIG[plan];
@@ -163,6 +171,7 @@ export const changePlan = onCall(
 
     requireOrg(user, data.organizationId);
     requireRole(user, UserRole.ADMIN);
+    blockDemoOrg(data.organizationId);
 
     const newPlan = data.newPlan as SubscriptionPlan;
     const newPlanConfig = PLAN_CONFIG[newPlan];
@@ -213,6 +222,7 @@ export const cancelSubscription = onCall(
 
     requireOrg(user, data.organizationId);
     requireRole(user, UserRole.ADMIN);
+    blockDemoOrg(data.organizationId);
 
     const orgDoc = await collections.organizations.doc(data.organizationId).get();
     const org = orgDoc.data();
@@ -246,6 +256,7 @@ export const resumeSubscription = onCall(
 
     requireOrg(user, data.organizationId);
     requireRole(user, UserRole.ADMIN);
+    blockDemoOrg(data.organizationId);
 
     const orgDoc = await collections.organizations.doc(data.organizationId).get();
     const org = orgDoc.data();
@@ -279,19 +290,156 @@ export const createBillingPortalSession = onCall(
 
     requireOrg(user, data.organizationId);
     requireRole(user, UserRole.ADMIN);
+    blockDemoOrg(data.organizationId);
 
     const orgDoc = await collections.organizations.doc(data.organizationId).get();
     const org = orgDoc.data();
-    if (!org?.stripe?.stripeCustomerId) {
-      throw new HttpsError("failed-precondition", "No billing account found.");
+    if (!org) {
+      throw new HttpsError("not-found", "Organization not found.");
     }
+
+    // Create Stripe customer on-demand if one doesn't exist yet
+    const customerId = await getOrCreateStripeCustomer(
+      data.organizationId,
+      org.name,
+      user.email
+    );
 
     const stripe = getStripe();
     const session = await stripe.billingPortal.sessions.create({
-      customer: org.stripe.stripeCustomerId,
+      customer: customerId,
       return_url: data.returnUrl || "https://app.autolientracker.com",
     });
 
     return { url: session.url };
+  }
+);
+
+export const getBillingHistory = onCall(
+  { secrets: [stripeSecretKey] },
+  async (request) => {
+    const { user } = await requireAuth(request);
+    const data = request.data as { organizationId: string; limit?: number };
+
+    if (!data.organizationId) {
+      throw new HttpsError("invalid-argument", "organizationId is required.");
+    }
+
+    requireOrg(user, data.organizationId);
+
+    const orgDoc = await collections.organizations.doc(data.organizationId).get();
+    const org = orgDoc.data();
+    if (!org?.stripe?.stripeCustomerId) {
+      return { invoices: [] };
+    }
+
+    const stripe = getStripe();
+    const invoices = await stripe.invoices.list({
+      customer: org.stripe.stripeCustomerId,
+      limit: Math.min(data.limit ?? 24, 100),
+    });
+
+    return {
+      invoices: invoices.data.map((inv) => ({
+        id: inv.id,
+        number: inv.number,
+        status: inv.status,
+        amountDue: inv.amount_due,
+        amountPaid: inv.amount_paid,
+        currency: inv.currency,
+        created: inv.created,
+        periodStart: inv.period_start,
+        periodEnd: inv.period_end,
+        hostedInvoiceUrl: inv.hosted_invoice_url,
+        invoicePdf: inv.invoice_pdf,
+        description: inv.lines.data[0]?.description ?? null,
+      })),
+    };
+  }
+);
+
+/**
+ * Creates an embedded Stripe Checkout Session.
+ * - For new subscriptions: mode=subscription with trial
+ * - For adding payment method to existing sub: mode=setup
+ */
+export const createCheckoutSession = onCall(
+  { secrets: [stripeSecretKey] },
+  async (request) => {
+    const { user } = await requireAuth(request);
+    const data = request.data as {
+      organizationId: string;
+      plan?: string;
+      mode: "subscription" | "setup";
+    };
+
+    if (!data.organizationId) {
+      throw new HttpsError("invalid-argument", "organizationId is required.");
+    }
+
+    requireOrg(user, data.organizationId);
+    requireRole(user, UserRole.ADMIN);
+    blockDemoOrg(data.organizationId);
+
+    const orgDoc = await collections.organizations.doc(data.organizationId).get();
+    const org = orgDoc.data();
+    if (!org) {
+      throw new HttpsError("not-found", "Organization not found.");
+    }
+
+    const customerId = await getOrCreateStripeCustomer(
+      data.organizationId,
+      org.name,
+      user.email
+    );
+
+    const stripe = getStripe();
+    const returnUrl = "https://app.autolientracker.com?checkout=complete";
+
+    if (data.mode === "setup") {
+      // Adding a payment method to an existing subscription
+      const session = await stripe.checkout.sessions.create({
+        ui_mode: "embedded",
+        mode: "setup",
+        customer: customerId,
+        currency: "usd",
+        return_url: returnUrl,
+      });
+
+      return { clientSecret: session.client_secret };
+    }
+
+    // New subscription checkout
+    if (!data.plan) {
+      throw new HttpsError("invalid-argument", "plan is required for subscription checkout.");
+    }
+
+    const plan = data.plan as SubscriptionPlan;
+    const planConfig = PLAN_CONFIG[plan];
+    if (!planConfig || !planConfig.stripePriceId) {
+      throw new HttpsError("invalid-argument", "Invalid plan.");
+    }
+
+    // Don't allow if already has active subscription
+    if (org.stripe?.status === "active" || org.stripe?.status === "trialing") {
+      throw new HttpsError(
+        "already-exists",
+        "Already subscribed. Use Change Plan to switch plans."
+      );
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      ui_mode: "embedded",
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: planConfig.stripePriceId, quantity: 1 }],
+      subscription_data: {
+        trial_period_days: 14,
+        metadata: { organizationId: data.organizationId, plan },
+      },
+      return_url: returnUrl,
+    });
+
+    return { clientSecret: session.client_secret };
   }
 );

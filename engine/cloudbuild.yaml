@@ -1,0 +1,52 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/alt-engine/worker:$COMMIT_SHA",
+        "-t",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/alt-engine/worker:latest",
+        "./engine",
+      ]
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "push",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/alt-engine/worker:$COMMIT_SHA",
+      ]
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "push",
+        "us-central1-docker.pkg.dev/$PROJECT_ID/alt-engine/worker:latest",
+      ]
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "alt-engine-worker"
+      - "--image"
+      - "us-central1-docker.pkg.dev/$PROJECT_ID/alt-engine/worker:$COMMIT_SHA"
+      - "--region"
+      - "us-central1"
+      - "--platform"
+      - "managed"
+      - "--memory"
+      - "4Gi"
+      - "--cpu"
+      - "1"
+      - "--timeout"
+      - "3600"
+      - "--min-instances"
+      - "0"
+      - "--max-instances"
+      - "5"
+      - "--no-allow-unauthenticated"
+      - "--update-env-vars"
+      - "NODE_ENV=production"
+
+images:
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/alt-engine/worker:$COMMIT_SHA"
+  - "us-central1-docker.pkg.dev/$PROJECT_ID/alt-engine/worker:latest"
