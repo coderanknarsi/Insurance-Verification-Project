@@ -69,7 +69,7 @@ export default function Navbar() {
                 : 'bg-navy text-white hover:bg-navy/90'
             }`}
           >
-            Start Free Pilot
+            Get Started Free
           </a>
         </div>
 
