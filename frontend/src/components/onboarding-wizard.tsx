@@ -274,13 +274,13 @@ export function OnboardingWizard({
                 <button
                   type="button"
                   onClick={() => setRequireFullCoverage(!requireFullCoverage)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     requireFullCoverage ? "bg-accent" : "bg-border-subtle"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                      requireFullCoverage ? "translate-x-5" : "translate-x-0.5"
+                    className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                      requireFullCoverage ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
                 </button>
@@ -363,13 +363,13 @@ export function OnboardingWizard({
                 <button
                   type="button"
                   onClick={() => setRequireLienholder(!requireLienholder)}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     requireLienholder ? "bg-accent" : "bg-border-subtle"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                      requireLienholder ? "translate-x-5" : "translate-x-0.5"
+                    className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                      requireLienholder ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
                 </button>
