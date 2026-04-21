@@ -47,6 +47,8 @@ export const getOrganizationProfile = onCall(async (request) => {
   return {
     name: org.name,
     type: org.type,
+    onboardingCompleted: org.onboardingCompleted === true,
+    lienholderName: org.settings?.lienholderName ?? "",
   };
 });
 
@@ -56,6 +58,8 @@ export const updateOrganizationProfile = onCall(async (request) => {
     organizationId?: string;
     name?: string;
     type?: OrganizationType;
+    lienholderName?: string;
+    onboardingCompleted?: boolean;
   };
 
   if (!data.organizationId || !data.name) {
@@ -83,11 +87,25 @@ export const updateOrganizationProfile = onCall(async (request) => {
     ? data.type
     : previousOrg.type;
 
-  await collections.organizations.doc(data.organizationId).update({
+  const updatePayload: Record<string, unknown> = {
     name,
     type: nextType,
     updatedAt: Timestamp.now(),
-  });
+  };
+
+  if (typeof data.lienholderName === "string") {
+    const lienholderName = collapseWhitespace(data.lienholderName);
+    if (lienholderName.length > 160) {
+      throw new HttpsError("invalid-argument", "Lienholder name must be 160 characters or fewer.");
+    }
+    updatePayload["settings.lienholderName"] = lienholderName;
+  }
+
+  if (typeof data.onboardingCompleted === "boolean") {
+    updatePayload.onboardingCompleted = data.onboardingCompleted;
+  }
+
+  await collections.organizations.doc(data.organizationId).update(updatePayload);
 
   await logAudit({
     organizationId: data.organizationId,
@@ -98,10 +116,14 @@ export const updateOrganizationProfile = onCall(async (request) => {
     previousValue: {
       name: previousOrg.name,
       type: previousOrg.type,
+      lienholderName: previousOrg.settings?.lienholderName,
+      onboardingCompleted: previousOrg.onboardingCompleted === true,
     },
     newValue: {
       name,
       type: nextType,
+      lienholderName: updatePayload["settings.lienholderName"] ?? previousOrg.settings?.lienholderName,
+      onboardingCompleted: updatePayload.onboardingCompleted ?? previousOrg.onboardingCompleted === true,
     },
   });
 

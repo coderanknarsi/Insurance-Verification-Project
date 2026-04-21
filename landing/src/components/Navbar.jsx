@@ -107,7 +107,7 @@ export default function Navbar() {
             onClick={() => setMobileOpen(false)}
             className="text-sm font-semibold bg-accent text-white px-5 py-2 rounded-full text-center"
           >
-            Start Free Pilot
+            Get Started Free
           </a>
         </div>
       )}

@@ -36,6 +36,7 @@ export interface OrganizationSettings {
   lapseGracePeriodDays: number;
   expirationWarningDays: number;
   complianceRules?: ComplianceRules;
+  lienholderName?: string;
 }
 
 export interface OrganizationSubscription {
@@ -57,6 +58,7 @@ export interface Organization {
   settings: OrganizationSettings;
   subscription: OrganizationSubscription;
   stripe?: StripeSubscriptionData;
+  onboardingCompleted?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

@@ -25,15 +25,22 @@ import { ComplianceSettings } from "@/components/compliance-settings";
 import { BillingSettings } from "@/components/billing-settings";
 import { VerificationsList } from "@/components/verifications-list";
 import { TeamSettings } from "@/components/team-settings";
-import { callGetDemoToken } from "@/lib/api";
-import type { BorrowerWithVehicles } from "@/lib/api";
+import { OnboardingWizard } from "@/components/onboarding-wizard";
+import {
+  callGetDemoToken,
+  callGetComplianceRules,
+  callGetOrganizationProfile,
+} from "@/lib/api";
+import type {
+  BorrowerWithVehicles,
+  ComplianceRules,
+  OrganizationProfile,
+} from "@/lib/api";
 
 const MARKETING_SITE_URL = process.env.NEXT_PUBLIC_MARKETING_SITE_URL ?? "https://autolientracker.com";
-const PENDING_ORGANIZATION_NAME_KEY = "pendingOrganizationName";
 
 export default function Home() {
   const { user, loading, organizationId, role } = useAuth();
-  const [organizationName, setOrganizationName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +58,9 @@ export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const borrowerTableRef = useRef<HTMLDivElement>(null);
   const [demoLoading, setDemoLoading] = useState(false);
+  const [onboardingProfile, setOnboardingProfile] = useState<OrganizationProfile | null>(null);
+  const [onboardingRules, setOnboardingRules] = useState<ComplianceRules | null>(null);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   const friendlyAuthError = (err: unknown): string => {
     const msg = err instanceof Error ? err.message : "";
@@ -72,33 +82,12 @@ export default function Home() {
     return map[code] || "Authentication failed. Please try again.";
   };
 
-  const persistOrganizationNameForSignup = (): string | null => {
-    const normalizedName = organizationName.trim();
-
-    if (!isSignUp) {
-      sessionStorage.removeItem(PENDING_ORGANIZATION_NAME_KEY);
-      return null;
-    }
-
-    if (!normalizedName) {
-      setError("Enter your company, dealership, or lender name.");
-      return null;
-    }
-
-    sessionStorage.setItem(PENDING_ORGANIZATION_NAME_KEY, normalizedName);
-    return normalizedName;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSigningIn(true);
     setError(null);
     try {
       if (isSignUp) {
-        if (!persistOrganizationNameForSignup()) {
-          setSigningIn(false);
-          return;
-        }
         await createUserWithEmailAndPassword(getClientAuth(), email, password);
       } else {
         await signInWithEmailAndPassword(getClientAuth(), email, password);
@@ -113,9 +102,6 @@ export default function Home() {
   const handleGoogleSignIn = async () => {
     setError(null);
     try {
-      if (isSignUp && !persistOrganizationNameForSignup()) {
-        return;
-      }
       await signInWithPopup(getClientAuth(), new GoogleAuthProvider());
     } catch (err) {
       setError(friendlyAuthError(err));
@@ -125,9 +111,6 @@ export default function Home() {
   const handleAppleSignIn = async () => {
     setError(null);
     try {
-      if (isSignUp && !persistOrganizationNameForSignup()) {
-        return;
-      }
       const provider = new OAuthProvider("apple.com");
       provider.addScope("email");
       provider.addScope("name");
@@ -165,6 +148,39 @@ export default function Home() {
     }
   }, [user, loading, handleTryDemo]);
 
+  // Load onboarding state once user is signed in (skip demo org)
+  useEffect(() => {
+    if (!user || !organizationId) {
+      setOnboardingChecked(false);
+      setOnboardingProfile(null);
+      setOnboardingRules(null);
+      return;
+    }
+    if (organizationId === "demo-org") {
+      setOnboardingChecked(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [profileRes, rulesRes] = await Promise.all([
+          callGetOrganizationProfile({ organizationId }),
+          callGetComplianceRules({ organizationId }),
+        ]);
+        if (cancelled) return;
+        setOnboardingProfile(profileRes.data);
+        setOnboardingRules(rulesRes.data);
+      } catch {
+        // Non-fatal: if we can't load, skip the wizard
+      } finally {
+        if (!cancelled) setOnboardingChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, organizationId]);
+
   if (loading || demoLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -198,11 +214,13 @@ export default function Home() {
           {/* Auth Card */}
           <div className="bg-card-bg border border-border-subtle rounded-2xl p-8">
             <h2 className="text-lg font-semibold text-offwhite text-center mb-1">
-              {isSignUp ? "Start your free pilot" : "Welcome back"}
+              {isSignUp ? "Create your account" : "Welcome back"}
             </h2>
             <p className="text-sm text-carbon-light text-center mb-6">
               {isSignUp ? "Create your account to get started" : "Sign in to your dashboard"}
             </p>
+
+
 
             {/* Social Sign-In */}
             <div className="space-y-3 mb-6">
@@ -239,20 +257,6 @@ export default function Home() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {isSignUp && (
-                <div className="space-y-2">
-                  <Label htmlFor="organizationName" className="text-sm text-carbon-light">Company / dealership / lender name</Label>
-                  <Input
-                    id="organizationName"
-                    type="text"
-                    value={organizationName}
-                    onChange={(e) => setOrganizationName(e.target.value)}
-                    required={isSignUp}
-                    placeholder="Acme Auto Finance"
-                    className="bg-surface border-border-subtle text-offwhite placeholder:text-carbon focus:border-accent focus:ring-accent/30"
-                  />
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm text-carbon-light">Email</Label>
                 <Input
@@ -294,13 +298,10 @@ export default function Home() {
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setError(null);
-                  if (isSignUp) {
-                    sessionStorage.removeItem(PENDING_ORGANIZATION_NAME_KEY);
-                  }
                 }}
                 className="text-accent hover:text-accent/80 font-medium transition-colors"
               >
-                {isSignUp ? "Sign in" : "Start free pilot"}
+                {isSignUp ? "Sign in" : "Get started free"}
               </button>
             </p>
           </div>
@@ -313,8 +314,28 @@ export default function Home() {
     );
   }
 
+  const shouldShowOnboarding =
+    onboardingChecked &&
+    organizationId &&
+    organizationId !== "demo-org" &&
+    onboardingProfile &&
+    onboardingRules &&
+    onboardingProfile.onboardingCompleted !== true;
+
   return (
     <div className="flex min-h-screen bg-background">
+      {shouldShowOnboarding && onboardingProfile && onboardingRules && organizationId && (
+        <OnboardingWizard
+          organizationId={organizationId}
+          initialName={onboardingProfile.name}
+          initialType={onboardingProfile.type}
+          initialRules={onboardingRules}
+          initialLienholderName={onboardingProfile.lienholderName ?? ""}
+          onComplete={() => {
+            setOnboardingProfile({ ...onboardingProfile, onboardingCompleted: true });
+          }}
+        />
+      )}
       {/* Sidebar */}
       <Sidebar
         userEmail={user.email ?? ""}

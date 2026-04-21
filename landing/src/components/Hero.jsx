@@ -125,7 +125,7 @@ export default function Hero() {
             className="btn-magnetic relative bg-accent text-white font-semibold text-lg px-8 py-4 rounded-full shadow-lg shadow-accent/30 hover:shadow-xl hover:shadow-accent/40 transition-shadow"
           >
             <span className="btn-bg bg-white/20 rounded-full" />
-            <span className="relative z-10">Start Free Pilot</span>
+            <span className="relative z-10">Get Started Free</span>
           </a>
           <a
             href="#features"

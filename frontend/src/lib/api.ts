@@ -145,6 +145,8 @@ export type OrganizationType = "BHPH_DEALER" | "BANK" | "CREDIT_UNION" | "FINANC
 export interface OrganizationProfile {
   name: string;
   type: OrganizationType;
+  onboardingCompleted?: boolean;
+  lienholderName?: string;
 }
 
 export interface AuditLogEntry {
@@ -212,6 +214,8 @@ export function callUpdateOrganizationProfile(data: {
   organizationId: string;
   name: string;
   type?: OrganizationType;
+  lienholderName?: string;
+  onboardingCompleted?: boolean;
 }) {
   return httpsCallable<typeof data, { success: boolean; name: string; type: OrganizationType }>(
     getClientFunctions(),

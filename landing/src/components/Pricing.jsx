@@ -134,7 +134,7 @@ export default function Pricing() {
                     : 'bg-white/[0.08] text-white hover:bg-white/[0.12]'
                 }`}
               >
-                Start Free Trial
+                Get Started Free
               </a>
             </div>
           ))}
