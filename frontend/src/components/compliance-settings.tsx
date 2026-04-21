@@ -415,7 +415,7 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
         <div className="divide-y divide-border-subtle">
           <Toggle
             label="Auto-send Expiry Reminders"
-            description="Automatically notify borrowers when their policy is about to expire"
+            description="Automatically notify borrowers via email and SMS when their policy is about to expire, giving them time to renew before a lapse occurs"
             checked={rules.autoSendReminder}
             onChange={(v) => update({ autoSendReminder: v })}
             onLabel="Enabled"

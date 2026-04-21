@@ -89,6 +89,10 @@ export function OnboardingWizard({
 
   const [lienholderName, setLienholderName] = useState(initialLienholderName);
   const [requireLienholder, setRequireLienholder] = useState(initialRules.requireLienholder);
+  const [autoSendReminder, setAutoSendReminder] = useState(initialRules.autoSendReminder);
+  const [reminderDays, setReminderDays] = useState<string>(
+    String(initialRules.reminderDaysBeforeExpiry ?? 10)
+  );
 
   const saveProfile = async (opts: { completed: boolean }) => {
     await callUpdateOrganizationProfile({
@@ -114,6 +118,8 @@ export function OnboardingWizard({
       maxCollisionDeductible: Number.isFinite(parsedCollision as number)
         ? (parsedCollision as number)
         : undefined,
+      autoSendReminder,
+      reminderDaysBeforeExpiry: Number(reminderDays) || 10,
     };
 
     await callUpdateComplianceRules({ organizationId, rules });
@@ -332,7 +338,7 @@ export function OnboardingWizard({
             <div className="space-y-5">
               <div className="text-center mb-2">
                 <h2 className="text-lg font-semibold text-offwhite mb-1">
-                  Lienholder information
+                  Lienholder &amp; notifications
                 </h2>
                 <p className="text-sm text-carbon-light">
                   We&apos;ll verify borrowers list you as the lienholder.
@@ -373,6 +379,48 @@ export function OnboardingWizard({
                     }`}
                   />
                 </button>
+              </div>
+
+              <div className="p-4 rounded-lg bg-surface border border-border-subtle space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="mr-4">
+                    <p className="text-sm text-offwhite font-medium">Auto-send expiry reminders</p>
+                    <p className="text-xs text-carbon-light mt-0.5">
+                      Automatically notify borrowers via <strong className="text-carbon-light">email and SMS</strong> when
+                      their policy is about to expire, giving them time to renew before a lapse occurs.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAutoSendReminder(!autoSendReminder)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      autoSendReminder ? "bg-accent" : "bg-border-subtle"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                        autoSendReminder ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {autoSendReminder && (
+                  <div className="space-y-2 pt-1 border-t border-border-subtle">
+                    <Label htmlFor="reminderDays" className="text-sm text-carbon-light">
+                      Days before expiry to send reminder
+                    </Label>
+                    <Input
+                      id="reminderDays"
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={reminderDays}
+                      onChange={(e) => setReminderDays(e.target.value)}
+                      className="w-24 bg-surface border-border-subtle text-offwhite focus:border-accent focus:ring-accent/30"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -429,6 +477,12 @@ export function OnboardingWizard({
                   <span className="text-xs text-carbon-light">Require lienholder</span>
                   <span className="text-sm text-offwhite font-medium text-right">
                     {requireLienholder ? "Required" : "Not required"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-carbon-light">Expiry reminders</span>
+                  <span className="text-sm text-offwhite font-medium text-right">
+                    {autoSendReminder ? `${reminderDays} days before (email + SMS)` : "Off"}
                   </span>
                 </div>
               </div>
