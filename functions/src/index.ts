@@ -46,6 +46,7 @@ export { stripeWebhook } from "./functions/stripe-webhook";
 // Super Admin
 export { getAdminDashboard } from "./functions/admin-dashboard";
 export { getAdminOrgDetail } from "./functions/admin-org-detail";
+export { deleteOrganization } from "./functions/delete-organization";
 
 // Demo
 export { getDemoToken } from "./functions/demo-auth";

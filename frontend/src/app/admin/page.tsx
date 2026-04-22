@@ -7,6 +7,7 @@ import { getClientAuth } from "@/lib/firebase";
 import {
   callGetAdminDashboard,
   callGetAdminOrgDetail,
+  callDeleteOrganization,
   callSaveMasterCredential,
   callGetMasterCredentials,
   callDeleteMasterCredential,
@@ -28,6 +29,14 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -93,6 +102,28 @@ export default function AdminDashboard() {
   const [expandedOrg, setExpandedOrg] = useState<string | null>(null);
   const [orgDetail, setOrgDetail] = useState<AdminOrgDetailData | null>(null);
   const [orgDetailLoading, setOrgDetailLoading] = useState(false);
+
+  // Delete org state
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteOrg = async () => {
+    if (!deleteTarget || deleteConfirmText !== deleteTarget.name) return;
+    setDeleting(true);
+    try {
+      await callDeleteOrganization({ organizationId: deleteTarget.id });
+      setDeleteTarget(null);
+      setDeleteConfirmText("");
+      setExpandedOrg(null);
+      setOrgDetail(null);
+      await fetchData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to delete organization");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -323,12 +354,13 @@ export default function AdminDashboard() {
                           <SortHeader field="borrowerCount">Borrowers</SortHeader>
                           <SortHeader field="userCount">Users</SortHeader>
                           <SortHeader field="createdAt">Created</SortHeader>
+                          <TableHead className="w-12"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {sortedOrgs.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                               No organizations found
                             </TableCell>
                           </TableRow>
@@ -358,10 +390,26 @@ export default function AdminDashboard() {
                                   <TableCell>{org.borrowerCount}</TableCell>
                                   <TableCell>{org.userCount}</TableCell>
                                   <TableCell className="text-muted-foreground">{formatDate(org.createdAt)}</TableCell>
+                                  <TableCell>
+                                    {org.id !== "demo-org" && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeleteTarget({ id: org.id, name: org.name });
+                                          setDeleteConfirmText("");
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </TableCell>
                                 </TableRow>
                                 {isExpanded && (
                                   <TableRow key={`${org.id}-detail`}>
-                                    <TableCell colSpan={7} className="p-0">
+                                    <TableCell colSpan={8} className="p-0">
                                       <OrgDetailPanel
                                         orgName={org.name}
                                         detail={orgDetail}
@@ -390,6 +438,38 @@ export default function AdminDashboard() {
             )}
           </>
         ) : null}
+
+        {/* Delete Organization Confirmation Dialog */}
+        <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirmText(""); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-red-500">Delete Organization</DialogTitle>
+              <DialogDescription>
+                This will permanently delete <strong>{deleteTarget?.name}</strong> and all associated data including borrowers, vehicles, policies, users, and notifications. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              <Label>Type the organization name to confirm:</Label>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={deleteTarget?.name}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={deleting || deleteConfirmText !== deleteTarget?.name}
+                onClick={handleDeleteOrg}
+              >
+                {deleting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Deleting…</> : "Delete Organization"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

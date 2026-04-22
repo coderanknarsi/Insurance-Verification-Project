@@ -614,6 +614,13 @@ export function callGetAdminOrgDetail(data: { organizationId: string }) {
   )(data);
 }
 
+export function callDeleteOrganization(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { success: boolean; organizationId: string; deleted: Record<string, number> }>(
+    getClientFunctions(),
+    "deleteOrganization"
+  )(data);
+}
+
 // Demo
 export function callGetDemoToken() {
   return httpsCallable<void, { token: string }>(
