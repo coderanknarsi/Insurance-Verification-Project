@@ -13,6 +13,8 @@ const footerLinks = [
     heading: 'Company',
     links: [
       { label: 'Contact', href: '#contact' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms & Conditions', href: '/terms' },
     ],
   },
 ];
