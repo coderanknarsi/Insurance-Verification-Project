@@ -66,14 +66,12 @@ export const updateComplianceRules = onCall(async (request) => {
     requireLienholder: Boolean(data.rules.requireLienholder),
     requireComprehensive: Boolean(data.rules.requireComprehensive),
     requireCollision: Boolean(data.rules.requireCollision),
-    maxCompDeductible:
-      data.rules.maxCompDeductible != null
-        ? Number(data.rules.maxCompDeductible)
-        : undefined,
-    maxCollisionDeductible:
-      data.rules.maxCollisionDeductible != null
-        ? Number(data.rules.maxCollisionDeductible)
-        : undefined,
+    ...(data.rules.maxCompDeductible != null
+      ? { maxCompDeductible: Number(data.rules.maxCompDeductible) }
+      : {}),
+    ...(data.rules.maxCollisionDeductible != null
+      ? { maxCollisionDeductible: Number(data.rules.maxCollisionDeductible) }
+      : {}),
     expirationWarningDays: Number(data.rules.expirationWarningDays) || 15,
     lapseGracePeriodDays: Number(data.rules.lapseGracePeriodDays) || 5,
     autoSendReminder: Boolean(data.rules.autoSendReminder),
