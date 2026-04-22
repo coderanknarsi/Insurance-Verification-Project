@@ -11,7 +11,7 @@ const SIGNUP_URL = `${DASHBOARD_BASE}?mode=signup`;
 const SHARED_FEATURES = [
   'Automated carrier verification',
   'Borrower intake via email & SMS',
-  'Insurance card OCR extraction',
+  'Automatic insurance card scanning',
   'Compliance dashboard & history',
   'Lapse detection & alerts',
   'Team access with role permissions',

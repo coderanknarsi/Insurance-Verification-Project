@@ -22,7 +22,7 @@ const capabilities = [
   },
   {
     icon: ScanSearch,
-    title: 'Insurance Card OCR',
+    title: 'Smart Document Scanning',
     description: 'Borrowers snap a photo; we extract policy details automatically.',
   },
   {
