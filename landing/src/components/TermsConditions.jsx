@@ -122,8 +122,8 @@ export default function TermsConditions() {
             <h2 className="text-lg font-semibold text-white mb-3">11. Contact Us</h2>
             <p>
               If you have questions about these Terms, please contact us at{' '}
-              <a href="mailto:support@autolientracker.com" className="text-accent hover:text-accent/80">
-                support@autolientracker.com
+              <a href="mailto:info@autolientracker.com" className="text-accent hover:text-accent/80">
+                info@autolientracker.com
               </a>.
             </p>
           </section>
