@@ -116,13 +116,13 @@ export const updateOrganizationProfile = onCall(async (request) => {
     previousValue: {
       name: previousOrg.name,
       type: previousOrg.type,
-      lienholderName: previousOrg.settings?.lienholderName,
+      lienholderName: previousOrg.settings?.lienholderName ?? "",
       onboardingCompleted: previousOrg.onboardingCompleted === true,
     },
     newValue: {
       name,
       type: nextType,
-      lienholderName: updatePayload["settings.lienholderName"] ?? previousOrg.settings?.lienholderName,
+      lienholderName: (updatePayload["settings.lienholderName"] ?? previousOrg.settings?.lienholderName) ?? "",
       onboardingCompleted: updatePayload.onboardingCompleted ?? previousOrg.onboardingCompleted === true,
     },
   });
