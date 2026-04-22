@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, Check, ChevronRight, Loader2 } from "lucide-react";
+import { Shield, Check, ChevronRight, Loader2, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,21 @@ const TYPE_OPTIONS: { value: OrganizationType; label: string }[] = [
   { value: "BANK", label: "Bank" },
   { value: "CREDIT_UNION", label: "Credit Union" },
   { value: "FINANCE_COMPANY", label: "Finance Company" },
+];
+
+const SHARED_FEATURES = [
+  "Automated insurance verification",
+  "Compliance dashboard",
+  "Lapse detection & alerts",
+  "Email & SMS notifications",
+  "Borrower self-service links",
+  "Team member access",
+];
+
+const PLANS = [
+  { id: "STARTER", name: "Starter", price: 149, vehicles: 50, features: ["Up to 50 vehicles", ...SHARED_FEATURES] },
+  { id: "GROWTH", name: "Growth", price: 349, vehicles: 150, popular: true, features: ["Up to 150 vehicles", ...SHARED_FEATURES] },
+  { id: "SCALE", name: "Scale", price: 599, vehicles: 300, features: ["Up to 300 vehicles", ...SHARED_FEATURES] },
 ];
 
 function StepHeader({ current, total }: { current: number; total: number }) {
@@ -426,7 +441,7 @@ export function OnboardingWizard({
           )}
 
           {step === 4 && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div className="text-center mb-2">
                 <h2 className="text-lg font-semibold text-offwhite mb-1">
                   You&apos;re all set
@@ -436,6 +451,7 @@ export function OnboardingWizard({
                 </p>
               </div>
 
+              {/* Settings summary */}
               <div className="rounded-lg bg-surface border border-border-subtle divide-y divide-border-subtle">
                 <div className="flex items-center justify-between px-4 py-3">
                   <span className="text-xs text-carbon-light">Company</span>
@@ -484,6 +500,68 @@ export function OnboardingWizard({
                   <span className="text-sm text-offwhite font-medium text-right">
                     {autoSendReminder ? `${reminderDays} days before (email + SMS)` : "Off"}
                   </span>
+                </div>
+              </div>
+
+              {/* Plan comparison */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="w-4 h-4 text-accent" />
+                  <h3 className="text-sm font-semibold text-offwhite">Your Plan</h3>
+                </div>
+                <div className="rounded-lg bg-accent/10 border border-accent/30 px-4 py-3 mb-4 flex items-start gap-3">
+                  <Zap className="w-4 h-4 text-accent mt-0.5 shrink-0" />
+                  <p className="text-sm text-carbon-light">
+                    You&apos;re starting with a <strong className="text-offwhite">14-day free trial</strong> on the Starter plan. No credit card required. Upgrade anytime from Billing.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {PLANS.map((plan) => {
+                    const isCurrent = plan.id === "STARTER";
+                    return (
+                      <div
+                        key={plan.id}
+                        className={`rounded-lg border p-3 relative ${
+                          isCurrent
+                            ? "bg-accent/5 border-accent"
+                            : "bg-surface border-border-subtle"
+                        }`}
+                      >
+                        {plan.popular && (
+                          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-accent text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                            Popular
+                          </span>
+                        )}
+                        <div className="mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold text-offwhite">{plan.name}</p>
+                            {isCurrent && (
+                              <Check className="w-3.5 h-3.5 text-accent" />
+                            )}
+                          </div>
+                          <p className="text-lg font-bold text-offwhite mt-1">
+                            ${plan.price}<span className="text-xs font-normal text-carbon-light">/mo</span>
+                          </p>
+                          <p className="text-[11px] text-carbon-light">Up to {plan.vehicles} vehicles</p>
+                        </div>
+                        <ul className="space-y-1">
+                          {plan.features.slice(1).map((f) => (
+                            <li key={f} className="flex items-start gap-1.5 text-[11px] text-carbon-light">
+                              <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-accent/60" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                        {isCurrent && (
+                          <div className="mt-2 text-center">
+                            <span className="text-[10px] font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+                              Current Plan
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
