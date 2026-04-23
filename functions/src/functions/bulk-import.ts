@@ -13,7 +13,7 @@ interface CsvRow {
   lastName: string;
   email?: string;
   phone?: string;
-  loanNumber: string;
+  loanNumber?: string;
   vin: string;
   make?: string;
   model?: string;
@@ -61,18 +61,26 @@ async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
   }
 }
 
-function validateRow(row: CsvRow, index: number): { error: string | null; warnings: string[] } {
+function getRowIdentifier(row: CsvRow): string {
+  return row.loanNumber || row.vin || "N/A";
+}
+
+export function validateCsvImportRow(
+  row: CsvRow,
+  index: number,
+): { error: string | null; warnings: string[] } {
   const warnings: string[] = [];
 
-  // Hard requirements: name + VIN + loan number
+  // Hard requirements: name + VIN + at least one contact method
   if (!row.firstName || !row.lastName) return { error: `Row ${index + 1}: firstName and lastName required.`, warnings };
-  if (!row.loanNumber) return { error: `Row ${index + 1}: loanNumber required.`, warnings };
   if (!row.vin) return { error: `Row ${index + 1}: vin required.`, warnings };
+  if (!row.email && !row.phone) return { error: `Row ${index + 1}: email or phone required.`, warnings };
 
   // Soft warnings
-  if (!row.email && !row.phone) {
-    warnings.push(`Row ${index + 1}: No email or phone — borrower cannot be contacted for verification.`);
-  } else if (!row.email) {
+  if (!row.loanNumber) {
+    warnings.push(`Row ${index + 1}: No loan number provided — matching will use VIN.`);
+  }
+  if (!row.email) {
     warnings.push(`Row ${index + 1}: No email provided.`);
   } else if (!row.phone) {
     warnings.push(`Row ${index + 1}: No phone provided.`);
@@ -105,12 +113,12 @@ export const bulkImportDeals = onCall(
 
     for (let i = 0; i < data.rows.length; i++) {
       const row = data.rows[i];
-      const { error: validationError, warnings } = validateRow(row, i);
+      const { error: validationError, warnings } = validateCsvImportRow(row, i);
 
       if (validationError) {
         results.push({
           row: i + 1,
-          loanNumber: row.loanNumber || "N/A",
+          loanNumber: getRowIdentifier(row),
           status: "error",
           error: validationError,
         });
@@ -130,18 +138,40 @@ export const bulkImportDeals = onCall(
       }
 
       try {
-        // Upsert borrower by loanNumber
-        const existingBorrowerSnap = await collections.borrowers
+        const existingVehicleSnap = await collections.vehicles
           .where("organizationId", "==", data.organizationId)
-          .where("loanNumber", "==", row.loanNumber)
+          .where("vin", "==", row.vin)
           .limit(1)
           .get();
 
         let borrowerId: string;
         let isNew = false;
+        let existingBorrower: FirebaseFirestore.DocumentSnapshot | null = null;
 
-        if (!existingBorrowerSnap.empty) {
-          borrowerId = existingBorrowerSnap.docs[0].id;
+        if (row.loanNumber) {
+          const existingBorrowerSnap = await collections.borrowers
+            .where("organizationId", "==", data.organizationId)
+            .where("loanNumber", "==", row.loanNumber)
+            .limit(1)
+            .get();
+
+          if (!existingBorrowerSnap.empty) {
+            existingBorrower = existingBorrowerSnap.docs[0];
+          }
+        }
+
+        if (!existingBorrower && !existingVehicleSnap.empty) {
+          const vehicleBorrowerId = existingVehicleSnap.docs[0].data().borrowerId;
+          if (vehicleBorrowerId) {
+            const borrowerSnap = await collections.borrowers.doc(vehicleBorrowerId).get();
+            if (borrowerSnap.exists) {
+              existingBorrower = borrowerSnap;
+            }
+          }
+        }
+
+        if (existingBorrower) {
+          borrowerId = existingBorrower.id;
           const updateData: Partial<Borrower> = {
             firstName: row.firstName,
             lastName: row.lastName,
@@ -149,6 +179,7 @@ export const bulkImportDeals = onCall(
           };
           if (row.email) updateData.email = row.email;
           if (row.phone) updateData.phone = row.phone;
+          if (row.loanNumber) updateData.loanNumber = row.loanNumber;
           if (data.smsConsent && row.phone) {
             updateData.smsConsentStatus = SmsConsentStatus.OPTED_IN;
             updateData.smsOptInTimestamp = now;
@@ -164,8 +195,7 @@ export const bulkImportDeals = onCall(
             lastName: row.lastName,
             ...(row.email && { email: row.email }),
             ...(row.phone && { phone: row.phone }),
-            loanNumber: row.loanNumber,
-            ...(!row.email && !row.phone && { contactIncomplete: true }),
+            ...(row.loanNumber && { loanNumber: row.loanNumber }),
             ...(data.smsConsent && row.phone && {
               smsConsentStatus: SmsConsentStatus.OPTED_IN,
               smsOptInTimestamp: now,
@@ -175,14 +205,6 @@ export const bulkImportDeals = onCall(
           };
           await ref.set(borrowerData);
         }
-
-        // Upsert vehicle by VIN
-        const existingVehicleSnap = await collections.vehicles
-          .where("organizationId", "==", data.organizationId)
-          .where("vin", "==", row.vin)
-          .limit(1)
-          .get();
-
         let vehicleId: string;
 
         if (!existingVehicleSnap.empty) {
@@ -236,7 +258,7 @@ export const bulkImportDeals = onCall(
 
         results.push({
           row: i + 1,
-          loanNumber: row.loanNumber,
+          loanNumber: getRowIdentifier(row),
           status: isNew ? "created" : "updated",
           borrowerId,
           vehicleId,
@@ -245,7 +267,7 @@ export const bulkImportDeals = onCall(
       } catch (err) {
         results.push({
           row: i + 1,
-          loanNumber: row.loanNumber,
+          loanNumber: getRowIdentifier(row),
           status: "error",
           error: err instanceof Error ? err.message : "Unknown error",
         });

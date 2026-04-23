@@ -337,7 +337,7 @@ export interface CsvRow {
   lastName: string;
   email?: string;
   phone?: string;
-  loanNumber: string;
+  loanNumber?: string;
   vin: string;
   make?: string;
   model?: string;

@@ -227,6 +227,11 @@ function countMappedFields(mapping: Record<string, keyof CsvRow | "">): number {
   return mapped.size;
 }
 
+function hasContactFieldMapped(mapping: Record<string, keyof CsvRow | "">): boolean {
+  const mapped = Object.values(mapping);
+  return mapped.includes("email") || mapped.includes("phone");
+}
+
 type Step = "upload" | "mapping" | "validation" | "importing" | "results";
 
 function downloadTemplate() {
@@ -343,9 +348,10 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
 
   // Check if all required fields are mapped
   // Only the truly required fields need mapping to proceed
-  const allFieldsMapped = REQUIRED_FIELDS
+  const requiredCoreFieldsMapped = REQUIRED_FIELDS
     .filter((f) => f.required)
     .every((f) => Object.values(mapping).includes(f.key));
+  const allFieldsMapped = requiredCoreFieldsMapped && hasContactFieldMapped(mapping);
 
   const proceedToValidation = () => {
     // Map raw rows to CsvRow using the mapping
@@ -364,7 +370,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
       return row as CsvRow;
     });
 
-    // Validate — only hard-fail on truly required fields
+    // Validate — hard-fail on core required fields plus at least one contact field
     const errors: string[] = [];
     const warnings: string[] = [];
     rows.forEach((row, i) => {
@@ -518,7 +524,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
                 </Button>
               </div>
               <p className="text-[11px] text-carbon-light text-center">
-                Maximum 500 rows per import &middot; Required: Name, Loan #, VIN &middot; Optional: Email, Phone, Make, Model, Year
+                Maximum 500 rows per import &middot; Required: Name, VIN, Email or Phone &middot; Optional: Loan #, Make, Model, Year
               </p>
             </div>
           )}
@@ -546,6 +552,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
                 const mapped = countMappedFields(mapping);
                 const requiredCount = REQUIRED_FIELDS.filter(f => f.required).length;
                 const requiredMapped = REQUIRED_FIELDS.filter(f => f.required && Object.values(mapping).includes(f.key)).length;
+                const contactMapped = hasContactFieldMapped(mapping);
                 if (mapped === REQUIRED_FIELDS.length) {
                   return (
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-green-500/10 border border-green-500/30 rounded-xl">
@@ -556,7 +563,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
                     </div>
                   );
                 }
-                if (requiredMapped === requiredCount && mapped < REQUIRED_FIELDS.length) {
+                if (requiredMapped === requiredCount && contactMapped && mapped < REQUIRED_FIELDS.length) {
                   return (
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-green-500/10 border border-green-500/30 rounded-xl">
                       <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
@@ -571,7 +578,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
                       <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
                       <p className="text-xs text-yellow-300">
-                        {mapped} of {REQUIRED_FIELDS.length} fields auto-detected. Map the required fields below.
+                        {mapped} of {REQUIRED_FIELDS.length} fields auto-detected. Map first name, last name, VIN, and at least one contact field below.
                       </p>
                     </div>
                   );
