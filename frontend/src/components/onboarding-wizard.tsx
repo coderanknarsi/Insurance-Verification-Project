@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, Check, ChevronRight, Loader2, Sparkles, Zap } from "lucide-react";
+import { Shield, Check, ChevronRight, Loader2, Sparkles, Zap, Upload, Download, Users, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ImportDialog, downloadTemplate } from "@/components/import-dialog";
 import {
   callUpdateComplianceRules,
   callUpdateOrganizationProfile,
@@ -18,7 +19,7 @@ interface OnboardingWizardProps {
   initialType?: OrganizationType;
   initialRules: ComplianceRules;
   initialLienholderName: string;
-  onComplete: () => void;
+  onComplete: (opts?: { imported?: boolean }) => void;
 }
 
 const TYPE_OPTIONS: { value: OrganizationType; label: string }[] = [
@@ -81,6 +82,8 @@ export function OnboardingWizard({
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importCompleted, setImportCompleted] = useState(false);
 
   const derivedInitialName = (() => {
     const trimmed = initialName.trim();
@@ -184,6 +187,11 @@ export function OnboardingWizard({
       }
       return;
     }
+
+    if (step === 4) {
+      setStep(5);
+      return;
+    }
   };
 
   const handleFinish = async () => {
@@ -191,7 +199,7 @@ export function OnboardingWizard({
     setSaving(true);
     try {
       await saveProfile({ completed: true });
-      onComplete();
+      onComplete({ imported: importCompleted });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to complete onboarding.");
     } finally {
@@ -204,7 +212,7 @@ export function OnboardingWizard({
     setSaving(true);
     try {
       await saveProfile({ completed: true });
-      onComplete();
+      onComplete({ imported: importCompleted });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to skip onboarding.");
     } finally {
@@ -225,7 +233,7 @@ export function OnboardingWizard({
         </div>
 
         <div className="bg-card-bg border border-border-subtle rounded-2xl p-8">
-          <StepHeader current={step} total={4} />
+          <StepHeader current={step} total={5} />
 
           {step === 1 && (
             <div className="space-y-5">
@@ -441,6 +449,76 @@ export function OnboardingWizard({
           )}
 
           {step === 4 && (
+            <div className="space-y-5">
+              <div className="text-center mb-2">
+                <div className="w-12 h-12 rounded-xl bg-accent/15 flex items-center justify-center mx-auto mb-3">
+                  <Users className="w-6 h-6 text-accent" />
+                </div>
+                <h2 className="text-lg font-semibold text-offwhite mb-1">
+                  Bring in your customer base
+                </h2>
+                <p className="text-sm text-carbon-light">
+                  Import your current borrowers so verification starts on day one. You can always do this later.
+                </p>
+              </div>
+
+              {importCompleted ? (
+                <div className="rounded-lg bg-accent/10 border border-accent/30 p-5 flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-accent mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-offwhite">Import complete</p>
+                    <p className="text-xs text-carbon-light mt-1">
+                      Your customers are loaded. Verification status will populate as we reach out. Continue to finish setup.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setImportOpen(true)}
+                      className="text-xs text-accent hover:underline mt-2"
+                    >
+                      Import another file
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-lg bg-surface border border-border-subtle p-4">
+                    <p className="text-xs font-medium text-offwhite mb-2">What you&apos;ll need in your CSV</p>
+                    <ul className="space-y-1 text-xs text-carbon-light">
+                      <li className="flex items-start gap-2">
+                        <span className="text-accent">•</span>
+                        <span><strong className="text-offwhite">Required:</strong> Name, VIN, and email or phone</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-accent">•</span>
+                        <span><strong className="text-offwhite">Optional:</strong> Loan #, make, model, year</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <Button
+                      type="button"
+                      onClick={() => setImportOpen(true)}
+                      className="bg-accent hover:bg-accent-hover text-white font-medium rounded-lg justify-center"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import customers now
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => downloadTemplate()}
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-carbon-light border border-border-subtle hover:text-offwhite hover:border-accent/50 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download CSV template
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {step === 5 && (
             <div className="space-y-6">
               <div className="text-center mb-2">
                 <h2 className="text-lg font-semibold text-offwhite mb-1">
@@ -570,20 +648,20 @@ export function OnboardingWizard({
           {error && <p className="text-sm text-red-400 mt-4 text-center">{error}</p>}
 
           <div className="flex items-center justify-between mt-8 gap-3">
-            {step > 1 && step < 4 ? (
+            {step > 1 && step < 5 ? (
               <button
                 type="button"
                 onClick={handleSkip}
                 disabled={saving}
                 className="text-xs text-carbon-light hover:text-offwhite transition-colors disabled:opacity-50"
               >
-                Skip for now
+                {step === 4 ? "Skip import" : "Skip for now"}
               </button>
             ) : (
               <span />
             )}
 
-            {step < 4 ? (
+            {step < 5 ? (
               <Button
                 type="button"
                 onClick={handleNext}
@@ -597,7 +675,7 @@ export function OnboardingWizard({
                   </>
                 ) : (
                   <>
-                    Continue
+                    {step === 4 && !importCompleted ? "Continue without importing" : "Continue"}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </>
                 )}
@@ -622,6 +700,16 @@ export function OnboardingWizard({
           </div>
         </div>
       </div>
+
+      <ImportDialog
+        organizationId={organizationId}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImportComplete={() => {
+          setImportCompleted(true);
+          setImportOpen(false);
+        }}
+      />
     </div>
   );
 }

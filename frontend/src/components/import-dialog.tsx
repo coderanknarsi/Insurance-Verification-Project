@@ -234,7 +234,7 @@ function hasContactFieldMapped(mapping: Record<string, keyof CsvRow | "">): bool
 
 type Step = "upload" | "mapping" | "validation" | "importing" | "results";
 
-function downloadTemplate() {
+export function downloadTemplate() {
   const headers = "firstName,lastName,email,phone,loanNumber,vin,make,model,year";
   const sample =
     "John,Smith,john.smith@email.com,555-123-4567,LN-2024-001,1HGCM82633A004352,Honda,Accord,2023";

@@ -333,6 +333,7 @@ export default function Home() {
           initialLienholderName={onboardingProfile.lienholderName ?? ""}
           onComplete={() => {
             setOnboardingProfile({ ...onboardingProfile, onboardingCompleted: true });
+            setRefreshKey((k) => k + 1);
           }}
         />
       )}
