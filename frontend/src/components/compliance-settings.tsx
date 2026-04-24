@@ -432,6 +432,37 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
           )}
         </div>
       </div>
+
+      {/* SMS Quiet Hours / Timezone */}
+      <div className="bg-card-bg border border-border-subtle rounded-xl p-5">
+        <h3 className="text-xs font-semibold text-offwhite uppercase tracking-wider mb-1">
+          SMS Sending Hours
+        </h3>
+        <p className="text-xs text-carbon-light mb-3">
+          Texts are only sent between 8:00 AM and 9:00 PM in your portfolio&apos;s
+          timezone, in line with TCPA-style quiet-hours rules. Requests made
+          outside these hours still go out by email; SMS is held back.
+        </p>
+        <div className="py-3">
+          <p className="text-sm text-offwhite font-medium">Portfolio Timezone</p>
+          <p className="text-xs text-carbon-light mt-0.5 mb-2">
+            Applied to every borrower in this organization.
+          </p>
+          <select
+            value={rules.timezone ?? "America/Chicago"}
+            onChange={(e) => update({ timezone: e.target.value })}
+            className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm text-offwhite focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+          >
+            <option value="America/New_York">Eastern (America/New_York)</option>
+            <option value="America/Chicago">Central (America/Chicago)</option>
+            <option value="America/Denver">Mountain (America/Denver)</option>
+            <option value="America/Phoenix">Mountain &mdash; no DST (America/Phoenix)</option>
+            <option value="America/Los_Angeles">Pacific (America/Los_Angeles)</option>
+            <option value="America/Anchorage">Alaska (America/Anchorage)</option>
+            <option value="Pacific/Honolulu">Hawaii (Pacific/Honolulu)</option>
+          </select>
+        </div>
+      </div>
     </div>
   );
 }

@@ -492,7 +492,14 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                                 });
                                 if (res.data.delivered) {
                                   const method = res.data.deliveryMethod === "both" ? "text & email" : res.data.deliveryMethod === "sms" ? "text message" : "email";
-                                  toast.success(`Request sent via ${method} to ${borrower.firstName} ${borrower.lastName}`);
+                                  if (res.data.smsSuppressedReason === "QUIET_HOURS") {
+                                    const tz = res.data.complianceTimezone ?? "your portfolio timezone";
+                                    toast.success(
+                                      `Request emailed to ${borrower.firstName} ${borrower.lastName}. SMS is paused until 8 AM ${tz} (TCPA quiet hours).`,
+                                    );
+                                  } else {
+                                    toast.success(`Request sent via ${method} to ${borrower.firstName} ${borrower.lastName}`);
+                                  }
                                 } else {
                                   toast.warning(`Link created but delivery failed: ${res.data.deliveryError ?? "Unknown error"}. Link: ${res.data.intakeUrl}`);
                                 }

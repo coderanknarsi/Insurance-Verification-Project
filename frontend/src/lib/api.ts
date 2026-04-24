@@ -138,6 +138,8 @@ export interface ComplianceRules {
   lapseGracePeriodDays: number;
   autoSendReminder: boolean;
   reminderDaysBeforeExpiry: number;
+  /** IANA timezone for TCPA-style SMS quiet hours (8 AM – 9 PM local). */
+  timezone?: string;
 }
 
 export type OrganizationType = "BHPH_DEALER" | "BANK" | "CREDIT_UNION" | "FINANCE_COMPANY";
@@ -644,6 +646,10 @@ export interface IntakeRequestResult {
   deliveryMethod: "sms" | "email" | "both";
   delivered: boolean;
   deliveryError: string | null;
+  /** Non-null when SMS was intentionally withheld (e.g. outside legal sending hours). */
+  smsSuppressedReason: "QUIET_HOURS" | null;
+  /** IANA timezone used to evaluate quiet hours. */
+  complianceTimezone: string | null;
 }
 
 export function callRequestBorrowerIntake(data: IntakeRequestInput) {

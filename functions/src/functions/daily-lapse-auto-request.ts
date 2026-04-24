@@ -49,6 +49,8 @@ export const dailyLapseAutoRequest = onSchedule(
       // Skip if auto-reminders are disabled for this org
       if (!rules?.autoSendReminder) continue;
 
+      const orgTimezone: string | undefined = rules.timezone;
+
       // Find policies with lapsed statuses in this org
       const policiesSnap = await collections.policies
         .where("organizationId", "==", orgDoc.id)
@@ -90,7 +92,7 @@ export const dailyLapseAutoRequest = onSchedule(
         const canSms =
           !!borrower.phone &&
           borrower.smsConsentStatus === SmsConsentStatus.OPTED_IN &&
-          isWithinSendingHours();
+          isWithinSendingHours(orgTimezone);
 
         if (!canEmail && !canSms) {
           logger.warn("[auto-request] No contact method for borrower", {

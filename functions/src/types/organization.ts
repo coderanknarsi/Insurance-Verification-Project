@@ -29,6 +29,11 @@ export interface ComplianceRules {
   lapseGracePeriodDays: number;
   autoSendReminder: boolean;
   reminderDaysBeforeExpiry: number;
+  /**
+   * IANA timezone used to evaluate TCPA-style SMS quiet hours (8 AM – 9 PM local).
+   * Defaults to America/Chicago when unset (migration fallback for older orgs).
+   */
+  timezone?: string;
 }
 
 export interface OrganizationSettings {

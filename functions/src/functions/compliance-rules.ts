@@ -7,6 +7,8 @@ import { AuditAction, AuditEntityType } from "../types/audit";
 import { UserRole } from "../types/user";
 import type { ComplianceRules } from "../types/organization";
 
+const DEFAULT_TIMEZONE = "America/Chicago";
+
 const DEFAULT_RULES: ComplianceRules = {
   requireLienholder: true,
   requireComprehensive: true,
@@ -15,7 +17,25 @@ const DEFAULT_RULES: ComplianceRules = {
   lapseGracePeriodDays: 5,
   autoSendReminder: false,
   reminderDaysBeforeExpiry: 10,
+  timezone: DEFAULT_TIMEZONE,
 };
+
+/**
+ * Validates that the given string is a supported IANA timezone in this runtime.
+ * Returns the validated timezone or throws an HttpsError.
+ */
+function validateTimezone(tz: string): string {
+  try {
+    // This throws `RangeError` for invalid timezones.
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    throw new HttpsError(
+      "invalid-argument",
+      `Invalid timezone: "${tz}". Use an IANA timezone like "America/Chicago".`
+    );
+  }
+}
 
 export const getComplianceRules = onCall(async (request) => {
   const { user } = await requireAuth(request);
@@ -33,7 +53,13 @@ export const getComplianceRules = onCall(async (request) => {
   }
 
   const org = orgDoc.data();
-  return org?.settings?.complianceRules ?? DEFAULT_RULES;
+  const stored = org?.settings?.complianceRules;
+  // Backfill legacy records that don't yet have a timezone.
+  return {
+    ...DEFAULT_RULES,
+    ...(stored ?? {}),
+    timezone: stored?.timezone ?? DEFAULT_TIMEZONE,
+  };
 });
 
 export const updateComplianceRules = onCall(async (request) => {
@@ -76,6 +102,9 @@ export const updateComplianceRules = onCall(async (request) => {
     lapseGracePeriodDays: Number(data.rules.lapseGracePeriodDays) || 5,
     autoSendReminder: Boolean(data.rules.autoSendReminder),
     reminderDaysBeforeExpiry: Number(data.rules.reminderDaysBeforeExpiry) || 10,
+    timezone: data.rules.timezone
+      ? validateTimezone(data.rules.timezone)
+      : DEFAULT_TIMEZONE,
   };
 
   await collections.organizations.doc(data.organizationId).update({

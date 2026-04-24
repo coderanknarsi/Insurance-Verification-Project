@@ -37,6 +37,7 @@ export const dailyExpiryReminder = onSchedule(
       if (!rules?.autoSendReminder) continue;
 
       const warningDays = rules.reminderDaysBeforeExpiry ?? 10;
+      const orgTimezone: string | undefined = rules.timezone;
       const now = new Date();
       const warningDate = new Date(now);
       warningDate.setDate(warningDate.getDate() + warningDays);
@@ -129,7 +130,7 @@ export const dailyExpiryReminder = onSchedule(
           borrower.phone &&
           borrower.smsConsentStatus === SmsConsentStatus.OPTED_IN &&
           daysUntilExpiry <= 3 &&
-          isWithinSendingHours();
+          isWithinSendingHours(orgTimezone);
 
         if (canSendSms) {
           const smsText = expiryReminderSmsText(

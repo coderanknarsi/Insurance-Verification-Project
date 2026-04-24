@@ -648,6 +648,13 @@ export function AddBorrowerDialog({
                     <CheckCircle className="w-3 h-3 inline mr-1" />
                     Insurance request sent via {intakeResult.deliveryMethod === "both" ? "email & SMS" : intakeResult.deliveryMethod}
                   </p>
+                  {intakeResult.smsSuppressedReason === "QUIET_HOURS" && (
+                    <p className="text-[11px] text-carbon-light mt-1">
+                      SMS is paused until 8 AM
+                      {intakeResult.complianceTimezone ? ` ${intakeResult.complianceTimezone}` : ""}
+                      {" "}(TCPA quiet hours). The email went out immediately.
+                    </p>
+                  )}
                 </div>
               )}
 

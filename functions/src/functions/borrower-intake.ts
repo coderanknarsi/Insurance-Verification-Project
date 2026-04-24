@@ -204,20 +204,6 @@ export const requestBorrowerIntake = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Borrower does not belong to this organization.");
   }
 
-  // Determine delivery channel: SMS preferred → email fallback
-  const canSms =
-    !!borrower.phone &&
-    borrower.smsConsentStatus === SmsConsentStatus.OPTED_IN &&
-    isWithinSendingHours();
-  const canEmail = !!borrower.email;
-
-  if (!canSms && !canEmail) {
-    throw new HttpsError(
-      "failed-precondition",
-      "Borrower has no reachable contact method. Add a phone number with SMS consent or an email address.",
-    );
-  }
-
   // Fetch vehicle for label
   const vehicleDoc = await collections.vehicles.doc(data.vehicleId).get();
   if (!vehicleDoc.exists) {
@@ -226,9 +212,28 @@ export const requestBorrowerIntake = onCall(async (request) => {
   const vehicle = vehicleDoc.data()!;
   const vehicleLabel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
 
-  // Fetch org for dealership name
+  // Fetch org for dealership name + compliance timezone
   const orgDoc = await db.collection("organizations").doc(data.organizationId).get();
-  const dealershipName = orgDoc.exists ? (orgDoc.data()?.name ?? "Your Lender") : "Your Lender";
+  const orgData = orgDoc.exists ? orgDoc.data() : null;
+  const dealershipName = orgData?.name ?? "Your Lender";
+  const orgTimezone: string | undefined = orgData?.settings?.complianceRules?.timezone;
+
+  // Determine delivery channel: SMS preferred → email fallback.
+  // SMS is further gated by TCPA-style quiet hours in the org's timezone.
+  const hasSmsConsent =
+    !!borrower.phone && borrower.smsConsentStatus === SmsConsentStatus.OPTED_IN;
+  const withinHours = isWithinSendingHours(orgTimezone);
+  const canSms = hasSmsConsent && withinHours;
+  const smsSuppressedReason: "QUIET_HOURS" | null =
+    hasSmsConsent && !withinHours ? "QUIET_HOURS" : null;
+  const canEmail = !!borrower.email;
+
+  if (!canSms && !canEmail) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Borrower has no reachable contact method. Add a phone number with SMS consent or an email address.",
+    );
+  }
 
   // Generate token
   const token = randomUUID();
@@ -318,6 +323,8 @@ export const requestBorrowerIntake = onCall(async (request) => {
     deliveryMethod,
     delivered,
     deliveryError: delivered ? null : (emailError ?? smsError),
+    smsSuppressedReason,
+    complianceTimezone: orgTimezone ?? null,
   };
 });
 
