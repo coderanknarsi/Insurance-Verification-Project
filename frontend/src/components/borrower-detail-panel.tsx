@@ -101,26 +101,29 @@ function PolicySection({ policy }: { policy: PolicyData }) {
       {/* Coverage & Deductibles — FIRST so lenders see it immediately */}
       {policy.coverageItems && policy.coverageItems.length > 0 && (
         <Section title="Coverage & Deductibles" icon={Shield}>
-          <div className="space-y-2">
+          <div
+            className="space-y-2"
+            style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+          >
             {policy.coverageItems.map((ci, idx) => (
               <div key={idx} className="bg-surface rounded-lg p-2.5">
-                <p className="text-xs font-medium text-offwhite mb-1">
+                <p className="text-xs font-semibold text-offwhite mb-1">
                   {ci.name ?? ci.type}
                 </p>
                 {ci.limits.map((l, li) => (
                   <div key={li} className="flex justify-between py-0.5">
-                    <span className="text-[10px] text-carbon-light">Limit ({l.type})</span>
-                    <span className="text-[10px] text-offwhite font-mono">
+                    <span className="text-xs text-carbon-light">Limit ({l.type})</span>
+                    <span className="text-xs font-semibold text-offwhite">
                       {l.amount ? `$${l.amount.toLocaleString()}` : l.text ?? "—"}
                     </span>
                   </div>
                 ))}
                 {ci.deductibles.map((d, di) => (
                   <div key={di} className="flex justify-between py-0.5">
-                    <span className="text-[10px] text-carbon-light">
+                    <span className="text-xs text-carbon-light">
                       Deductible{d.isWaiver ? " (Waiver)" : ""}
                     </span>
-                    <span className="text-[10px] text-offwhite font-mono">
+                    <span className="text-xs font-semibold text-offwhite">
                       {d.amount ? `$${d.amount.toLocaleString()}` : d.text ?? "—"}
                     </span>
                   </div>
