@@ -11,6 +11,7 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "lint": "eslint src/**/*.ts",
+    "test": "tsc && node --test \"lib/**/*.test.js\"",
     "seed": "npm run build && node lib/seed.js",
     "seed:prod": "npm run build && node lib/seed-prod.js"
   },
