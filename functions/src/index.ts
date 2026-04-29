@@ -29,6 +29,7 @@ export { getOrganizationProfile, updateOrganizationProfile } from "./functions/o
 // Phase 6: Automated Reminders
 export { dailyExpiryReminder } from "./functions/daily-expiry-reminder";
 export { dailyLapseAutoRequest } from "./functions/daily-lapse-auto-request";
+export { dailyComplianceEscalation } from "./functions/daily-compliance-escalation";
 
 // Phase 6: Stripe Billing
 export {
@@ -68,6 +69,7 @@ export {
 
 // Data Feed Engine Dispatcher
 export { weeklyDataFeedDispatcher } from "./functions/data-feed-dispatcher";
+export { simulateVerificationSweep } from "./functions/simulate-verification-sweep";
 
 // Borrower Intake (magic link SMS workflow)
 export {
