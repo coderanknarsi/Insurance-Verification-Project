@@ -534,3 +534,128 @@ export async function sendAdminAlertEmail(
   }
   return { id: data?.id ?? "", success: true };
 }
+
+/**
+ * Sends a lapse alert to the dealer/lender when a borrower whose policy is
+ * outside the automated sweep (unsupported carrier or no master creds)
+ * reaches their expiration date with no renewal in hand.
+ */
+export async function sendDealerLapseAlertEmail(input: {
+  to: string;
+  borrowerName: string;
+  vehicleLabel: string;
+  insuranceProvider: string;
+  reason: "unsupported_carrier" | "no_credentials";
+  dashboardUrl: string;
+}): Promise<EmailResult> {
+  const reasonText =
+    input.reason === "unsupported_carrier"
+      ? `${input.insuranceProvider} isn't on our automated verification list — we couldn't confirm a renewal.`
+      : `We don't have master credentials for ${input.insuranceProvider} on file — we couldn't confirm a renewal.`;
+  const subject = `Policy lapse alert: ${input.borrowerName} (${input.vehicleLabel})`;
+  const title = `${input.borrowerName}'s policy expired today`;
+  const details = `
+    <p style="margin:0 0 12px;">${reasonText}</p>
+    <p style="margin:0 0 12px;">Vehicle: <strong>${input.vehicleLabel}</strong></p>
+    <p style="margin:0 0 12px;">Carrier: <strong>${input.insuranceProvider}</strong></p>
+    <p style="margin:0 0 16px;">Manual follow-up may be required.</p>
+    <p style="margin:0;"><a href="${input.dashboardUrl}" style="color:#3b82f6;">Open dashboard →</a></p>
+  `;
+  const resend = getResend();
+  const { data, error } = await resend.emails.send({
+    from: fromEmail.value(),
+    to: input.to,
+    subject,
+    html: adminAlertHtml(title, details),
+  });
+  if (error) {
+    console.error("Failed to send dealer lapse alert:", error.message);
+    return { id: "", success: false, error: error.message };
+  }
+  return { id: data?.id ?? "", success: true };
+}
+
+// ─── Intake Validation Alert (lender-side) ──────────────────────
+
+/**
+ * Notifies the lender when a borrower's intake submission was either
+ * outright rejected (VIN mismatch, name mismatch, expired policy) or
+ * accepted with warnings that need human review (lienholder mismatch,
+ * low OCR confidence). Sent immediately, no batching.
+ */
+export async function sendIntakeReviewEmail(input: {
+  to: string;
+  severity: "rejected" | "review";
+  borrowerName: string;
+  vehicleLabel: string;
+  dashboardUrl: string;
+  reasons: string[];
+  submittedFileUrl?: string;
+}): Promise<EmailResult> {
+  const resend = getResend();
+  const isRejected = input.severity === "rejected";
+  const accent = isRejected ? "#ef4444" : "#f59e0b";
+  const headline = isRejected
+    ? "Borrower upload was rejected"
+    : "Borrower upload needs review";
+  const subjectPrefix = isRejected ? "🚫 Rejected" : "⚠️ Review";
+
+  const reasonItems = input.reasons
+    .map(
+      (r) =>
+        `<li style="margin:6px 0;font-size:13px;color:#cdd6f0;line-height:1.5;">${r}</li>`,
+    )
+    .join("");
+
+  const html = layoutHtml(`
+    <div style="display:inline-block;padding:6px 12px;border-radius:999px;background:${accent}22;border:1px solid ${accent}55;margin-bottom:16px;">
+      <span style="font-size:11px;font-weight:600;color:${accent};letter-spacing:0.5px;text-transform:uppercase;">
+        ${isRejected ? "Submission Rejected" : "Manual Review Needed"}
+      </span>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#ffffff;">
+      ${headline}
+    </h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#8b9dc3;line-height:1.6;">
+      <strong style="color:#ffffff;">${input.borrowerName}</strong> just submitted insurance info via the intake link
+      for <strong style="color:#ffffff;">${input.vehicleLabel}</strong>.
+      ${isRejected
+        ? "We blocked the submission and asked them to re-upload."
+        : "We accepted the submission, but you should verify the details below before marking compliant."}
+    </p>
+    <div style="background:#0c1222;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+      <p style="margin:0 0 8px;font-size:12px;color:#6b7a99;text-transform:uppercase;letter-spacing:0.5px;">
+        ${isRejected ? "Reason for rejection" : "What to verify"}
+      </p>
+      <ul style="margin:0;padding-left:18px;">
+        ${reasonItems}
+      </ul>
+    </div>
+    ${input.submittedFileUrl
+      ? `<p style="margin:0 0 16px;font-size:13px;color:#8b9dc3;">
+          <a href="${input.submittedFileUrl}" style="color:#3b82f6;text-decoration:none;">View the document the borrower uploaded →</a>
+        </p>`
+      : ""}
+    <table cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
+      <tr><td style="background:#3b82f6;border-radius:10px;">
+        <a href="${input.dashboardUrl}" target="_blank"
+           style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+          Open dashboard
+        </a>
+      </td></tr>
+    </table>
+  `);
+
+  const { data, error } = await resend.emails.send({
+    from: fromEmail.value(),
+    to: input.to,
+    subject: `${subjectPrefix}: ${input.borrowerName} – ${input.vehicleLabel}`,
+    html,
+  });
+
+  if (error) {
+    console.error("Failed to send intake review email:", error.message);
+    return { id: "", success: false, error: error.message };
+  }
+  return { id: data?.id ?? "", success: true };
+}

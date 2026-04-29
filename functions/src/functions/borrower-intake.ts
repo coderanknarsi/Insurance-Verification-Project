@@ -9,9 +9,12 @@ import { ComplianceIssue, PolicyStatus, DashboardStatus, CoverageItem, CoverageD
 import { SmsConsentStatus } from "../types/borrower";
 import { extractInsuranceFromImage, ExtractedInsuranceData } from "../services/insurance-ocr";
 import { sendSms, intakeRequestSmsText, isWithinSendingHours } from "../services/telnyx";
-import { sendIntakeRequestEmail } from "../services/email";
+import { sendIntakeRequestEmail, sendIntakeReviewEmail } from "../services/email";
+import { validateIntakeSubmission, type ValidationIssue } from "../services/intake-validation";
+import { getLenderAlertEmail } from "../services/lender-email";
 import { logger } from "firebase-functions/v2";
 import { DEMO_ORG_ID } from "../constants";
+void DEMO_ORG_ID;
 import { NotificationType, NotificationTrigger, NotificationStatus } from "../types/notification";
 
 const INTAKE_URL_BASE = "https://app.autolientracker.com/intake";
@@ -189,9 +192,7 @@ export const requestBorrowerIntake = onCall(async (request) => {
   requireRole(user, UserRole.ADMIN, UserRole.MANAGER);
   requireOrg(user, data.organizationId);
 
-  if (data.organizationId === DEMO_ORG_ID) {
-    throw new HttpsError("permission-denied", "Intake requests are disabled for demo accounts.");
-  }
+  // Demo org is allowed — it's how prospects walk through the borrower flow.
 
   // Fetch borrower
   const borrowerDoc = await collections.borrowers.doc(data.borrowerId).get();
@@ -352,11 +353,16 @@ export const getIntakeInfo = onCall(async (request) => {
   if (tokenData.status === "COMPLETED") {
     const orgDoc = await collections.organizations.doc(tokenData.organizationId).get();
     const dealershipName = orgDoc.exists ? (orgDoc.data()?.name ?? tokenData.dealershipName) : tokenData.dealershipName;
+    const borrowerDoc = await collections.borrowers.doc(tokenData.borrowerId).get();
+    const vehicleDoc = await collections.vehicles.doc(tokenData.vehicleId).get();
     return {
       status: "COMPLETED",
       borrowerFirstName: tokenData.borrowerFirstName,
+      borrowerLastName: borrowerDoc.exists ? (borrowerDoc.data()?.lastName ?? "") : "",
       vehicleLabel: tokenData.vehicleLabel,
+      vehicleVin: vehicleDoc.exists ? (vehicleDoc.data()?.vin ?? "") : "",
       dealershipName,
+      organizationId: tokenData.organizationId,
     };
   }
 
@@ -367,12 +373,17 @@ export const getIntakeInfo = onCall(async (request) => {
 
   const orgDoc = await collections.organizations.doc(tokenData.organizationId).get();
   const dealershipName = orgDoc.exists ? (orgDoc.data()?.name ?? tokenData.dealershipName) : tokenData.dealershipName;
+  const borrowerDoc = await collections.borrowers.doc(tokenData.borrowerId).get();
+  const vehicleDoc = await collections.vehicles.doc(tokenData.vehicleId).get();
 
   return {
     status: "PENDING",
     borrowerFirstName: tokenData.borrowerFirstName,
+    borrowerLastName: borrowerDoc.exists ? (borrowerDoc.data()?.lastName ?? "") : "",
     vehicleLabel: tokenData.vehicleLabel,
+    vehicleVin: vehicleDoc.exists ? (vehicleDoc.data()?.vin ?? "") : "",
     dealershipName,
+    organizationId: tokenData.organizationId,
   };
 });
 
@@ -465,8 +476,82 @@ export const submitBorrowerIntake = onCall(
 
     // ─── OCR extraction from uploaded card ─────────────────
     let ocrExtracted = false;
+    let extracted: ExtractedInsuranceData | null = null;
     if (data.insuranceCardBase64) {
-      const extracted = await extractInsuranceFromImage(data.insuranceCardBase64, cardContentType);
+      extracted = await extractInsuranceFromImage(data.insuranceCardBase64, cardContentType);
+    }
+
+    // ─── Validate the upload BEFORE applying it to the policy ──
+    // We need borrower, vehicle, and org info to evaluate.
+    const [borrowerDoc, vehicleDoc, orgDoc] = await Promise.all([
+      collections.borrowers.doc(tokenData.borrowerId).get(),
+      collections.vehicles.doc(tokenData.vehicleId).get(),
+      collections.organizations.doc(tokenData.organizationId).get(),
+    ]);
+    const borrower = borrowerDoc.exists ? borrowerDoc.data() : null;
+    const vehicle = vehicleDoc.exists ? vehicleDoc.data() : null;
+    const orgData = orgDoc.exists ? orgDoc.data() : null;
+    const orgRules = orgData?.settings?.complianceRules;
+    const expectedLienholder = orgData?.settings?.lienholderName ?? null;
+
+    let validationIssues: { hardRejects: ValidationIssue[]; softWarnings: ValidationIssue[] } = {
+      hardRejects: [],
+      softWarnings: [],
+    };
+
+    if (extracted) {
+      validationIssues = validateIntakeSubmission(extracted, {
+        vehicleVin: vehicle?.vin ?? null,
+        vehicleLabel: tokenData.vehicleLabel,
+        borrowerFirstName: borrower?.firstName ?? tokenData.borrowerFirstName,
+        borrowerLastName: borrower?.lastName ?? null,
+        expectedLienholderName: expectedLienholder,
+        requireLienholder: !!orgRules?.requireLienholder,
+      });
+    }
+
+    // ─── HARD REJECT: stop, alert lender, surface error to borrower ─
+    if (validationIssues.hardRejects.length > 0) {
+      // Log a notification so the dashboard timeline shows the rejection.
+      await collections.notifications.doc().set({
+        organizationId: tokenData.organizationId,
+        borrowerId: tokenData.borrowerId,
+        type: NotificationType.PORTAL,
+        trigger: NotificationTrigger.INTAKE_REJECTED,
+        status: NotificationStatus.COMPLETED,
+        content:
+          "Borrower intake upload rejected: " +
+          validationIssues.hardRejects.map((r) => r.code).join(", "),
+        createdAt: now,
+      });
+
+      // Alert the lender by email — fire-and-forget.
+      const lenderEmail = await getLenderAlertEmail(tokenData.organizationId);
+      if (lenderEmail) {
+        const borrowerName = [borrower?.firstName, borrower?.lastName]
+          .filter(Boolean)
+          .join(" ") || tokenData.borrowerFirstName;
+        sendIntakeReviewEmail({
+          to: lenderEmail,
+          severity: "rejected",
+          borrowerName,
+          vehicleLabel: tokenData.vehicleLabel,
+          dashboardUrl: "https://app.autolientracker.com",
+          reasons: validationIssues.hardRejects.map((r) => r.lenderMessage),
+        }).catch((err) =>
+          logger.error("[intake] failed to send rejection alert", { err: String(err) }),
+        );
+      }
+
+      // Do NOT mark the token completed — borrower can retry with the same link.
+      const userMessage = validationIssues.hardRejects
+        .map((r) => r.borrowerMessage)
+        .join("\n\n");
+      throw new HttpsError("failed-precondition", userMessage);
+    }
+
+    // ─── No hard rejects — apply OCR fields to the policy update ──
+    if (extracted) {
       ocrExtracted = applyOcrToPolicy(extracted, policyUpdate, data.insuranceProvider, data.policyNumber);
     }
 
@@ -476,11 +561,28 @@ export const submitBorrowerIntake = onCall(
 
     const policyDoc = await collections.policies.doc(tokenData.policyId).get();
     const existingPolicy = policyDoc.exists ? policyDoc.data() ?? null : null;
-
-    const vehicleDoc = await collections.vehicles.doc(tokenData.vehicleId).get();
-    const vehicleVin = vehicleDoc.exists ? vehicleDoc.data()?.vin : null;
+    const vehicleVin = vehicle?.vin ?? null;
 
     evaluateProvisionalCompliance(policyUpdate, existingPolicy, vehicleVin, hasCredentials, hasCard);
+
+    // If we have soft warnings, append them to compliance issues so the
+    // dashboard reflects "needs review".
+    if (validationIssues.softWarnings.length > 0) {
+      const existingIssues = (policyUpdate.complianceIssues as string[]) ?? [];
+      const warningCodes: string[] = [];
+      for (const w of validationIssues.softWarnings) {
+        if (w.code === "LIENHOLDER_MISMATCH" || w.code === "LIENHOLDER_MISSING") {
+          warningCodes.push(ComplianceIssue.MISSING_LIENHOLDER);
+        }
+        // FUTURE_EFFECTIVE_DATE and LOW_OCR_CONFIDENCE map to UNVERIFIED.
+        if (w.code === "FUTURE_EFFECTIVE_DATE" || w.code === "LOW_OCR_CONFIDENCE") {
+          if (!existingIssues.includes(ComplianceIssue.UNVERIFIED)) {
+            warningCodes.push(ComplianceIssue.UNVERIFIED);
+          }
+        }
+      }
+      policyUpdate.complianceIssues = Array.from(new Set([...existingIssues, ...warningCodes]));
+    }
 
     // Update policy
     await collections.policies.doc(tokenData.policyId).update(policyUpdate);
@@ -518,6 +620,39 @@ export const submitBorrowerIntake = onCall(
       content: contentParts.join(" "),
       createdAt: now,
     });
+
+    // ─── SOFT warnings → log review notification + email lender ──
+    if (validationIssues.softWarnings.length > 0) {
+      await collections.notifications.doc().set({
+        organizationId: tokenData.organizationId,
+        borrowerId: tokenData.borrowerId,
+        type: NotificationType.PORTAL,
+        trigger: NotificationTrigger.INTAKE_REVIEW_NEEDED,
+        status: NotificationStatus.COMPLETED,
+        content:
+          "Manual review needed: " +
+          validationIssues.softWarnings.map((w) => w.code).join(", "),
+        createdAt: now,
+      });
+
+      const lenderEmail = await getLenderAlertEmail(tokenData.organizationId);
+      if (lenderEmail) {
+        const borrowerName = [borrower?.firstName, borrower?.lastName]
+          .filter(Boolean)
+          .join(" ") || tokenData.borrowerFirstName;
+        sendIntakeReviewEmail({
+          to: lenderEmail,
+          severity: "review",
+          borrowerName,
+          vehicleLabel: tokenData.vehicleLabel,
+          dashboardUrl: "https://app.autolientracker.com",
+          reasons: validationIssues.softWarnings.map((w) => w.lenderMessage),
+          submittedFileUrl: policyUpdate.insuranceCardUrl as string | undefined,
+        }).catch((err) =>
+          logger.error("[intake] failed to send review alert", { err: String(err) }),
+        );
+      }
+    }
 
     return { success: true };
   }
