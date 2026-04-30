@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge, StatusDot } from "@/components/status-badge";
+import { BorrowerVerificationBadge } from "@/components/borrower-verification-badge";
 import { callGetBorrowers } from "@/lib/api";
 import type { BorrowerWithVehicles } from "@/lib/api";
 import { Search, Send, Upload, UserPlus, Loader2, X } from "lucide-react";
@@ -18,6 +19,7 @@ import { ImportDialog } from "@/components/import-dialog";
 import { AddBorrowerDialog } from "@/components/add-borrower-dialog";
 import { callRequestBorrowerIntake } from "@/lib/api";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 
 export type StatusFilter = "ALL" | "GREEN" | "YELLOW" | "RED" | "ACTION_REQUIRED" | "AWAITING_INFO";
 
@@ -28,6 +30,8 @@ interface BorrowerTableProps {
   externalFilter?: StatusFilter;
   onFilterChange?: (filter: StatusFilter) => void;
   refreshKey?: number;
+  /** When true, highlight the Add Borrower button with a pulsing ring (demo first-run guidance). */
+  spotlightAddBorrower?: boolean;
 }
 
 const filterTabs: { value: StatusFilter; label: string; dotColor?: string }[] = [
@@ -54,6 +58,55 @@ const ISSUE_LABELS: Record<string, string> = {
   AWAITING_CREDENTIALS: "Awaiting Info",
 };
 
+const CONTACT_TRIGGER_LABELS: Record<string, string> = {
+  EXPIRING_SOON: "Expiry reminder",
+  LAPSE_DETECTED: "Lapse notice",
+  LAPSED_SECOND_NOTICE: "2nd lapse notice",
+  LAPSED_FINAL_NOTICE: "Final notice",
+  LAPSE_CURED: "Cure confirmation",
+  COVERAGE_FIRST_NOTICE: "Coverage notice",
+  COVERAGE_SECOND_NOTICE: "2nd coverage notice",
+  COVERAGE_FINAL_NOTICE: "Final notice",
+  COVERAGE_CURED: "Cure confirmation",
+  REINSTATEMENT_REMINDER: "Reinstatement",
+  VERIFICATION_PROOF_REQUEST: "Proof requested",
+  INTAKE_REQUESTED: "Intake link",
+  INTAKE_COMPLETED: "Intake submitted",
+  DEALER_SUBMITTED: "Dealer upload",
+};
+
+const CONTACT_FINAL_TRIGGERS = new Set([
+  "LAPSED_FINAL_NOTICE",
+  "COVERAGE_FINAL_NOTICE",
+]);
+const CONTACT_WARNING_TRIGGERS = new Set([
+  "LAPSE_DETECTED",
+  "LAPSED_SECOND_NOTICE",
+  "COVERAGE_FIRST_NOTICE",
+  "COVERAGE_SECOND_NOTICE",
+  "EXPIRING_SOON",
+  "VERIFICATION_PROOF_REQUEST",
+]);
+const CONTACT_SUCCESS_TRIGGERS = new Set([
+  "LAPSE_CURED",
+  "COVERAGE_CURED",
+  "INTAKE_COMPLETED",
+  "DEALER_SUBMITTED",
+]);
+
+function relativeDays(ms: number): string {
+  if (!ms) return "—";
+  const diffMs = Date.now() - ms;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMs / 3600000);
+  const diffDay = Math.floor(diffMs / 86400000);
+  if (diffMin < 60) return diffMin <= 1 ? "just now" : `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 30) return `${diffDay}d ago`;
+  const months = Math.floor(diffDay / 30);
+  return `${months}mo ago`;
+}
+
 function formatDate(dateStr?: string): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr + "T00:00:00");
@@ -67,7 +120,8 @@ function daysUntil(dateStr?: string): number | null {
   return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoaded, externalFilter, onFilterChange, refreshKey }: BorrowerTableProps) {
+export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoaded, externalFilter, onFilterChange, refreshKey, spotlightAddBorrower }: BorrowerTableProps) {
+  const { user: currentUser } = useAuth();
   const [borrowers, setBorrowers] = useState<BorrowerWithVehicles[]>([]);
   const [internalFilter, setInternalFilter] = useState<StatusFilter>("ALL");
   const filter = externalFilter ?? internalFilter;
@@ -85,6 +139,14 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
   const [addBorrowerOpen, setAddBorrowerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Allow other components (e.g. the demo welcome modal) to programmatically
+  // open the Add Borrower dialog by dispatching `window.dispatchEvent(new Event("open-add-borrower"))`.
+  useEffect(() => {
+    const handler = () => setAddBorrowerOpen(true);
+    window.addEventListener("open-add-borrower", handler);
+    return () => window.removeEventListener("open-add-borrower", handler);
+  }, []);
 
   const fetchBorrowers = useCallback(
     async (startAfter?: string) => {
@@ -213,7 +275,10 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
           <Button
             size="sm"
             onClick={() => setAddBorrowerOpen(true)}
-            className="bg-accent hover:bg-accent-hover text-white border-0 text-xs h-7 px-3"
+            data-tour="add-borrower"
+            className={`bg-accent hover:bg-accent-hover text-white border-0 text-xs h-7 px-3 ${
+              spotlightAddBorrower ? "ring-2 ring-accent ring-offset-2 ring-offset-card-bg animate-pulse" : ""
+            }`}
           >
             <UserPlus className="w-3 h-3 mr-1.5" />
             Add Borrower
@@ -369,6 +434,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                   <TableHead className="text-carbon-light text-xs font-mono uppercase tracking-wider">Insurer</TableHead>
                   <TableHead className="text-carbon-light text-xs font-mono uppercase tracking-wider">Policy #</TableHead>
                   <TableHead className="text-carbon-light text-xs font-mono uppercase tracking-wider">Expires</TableHead>
+                  <TableHead className="text-carbon-light text-xs font-mono uppercase tracking-wider">Last Contact</TableHead>
                   <TableHead className="text-carbon-light text-xs font-mono uppercase tracking-wider">Status</TableHead>
                   <TableHead className="text-carbon-light text-xs font-mono uppercase tracking-wider">Issues</TableHead>
                   <TableHead className="text-right text-carbon-light text-xs font-mono uppercase tracking-wider">Actions</TableHead>
@@ -450,7 +516,41 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                         </div>
                       </TableCell>
                       <TableCell>
+                        {borrower.lastContact ? (
+                          (() => {
+                            const lc = borrower.lastContact;
+                            const tone = CONTACT_FINAL_TRIGGERS.has(lc.trigger)
+                              ? "text-red-400"
+                              : CONTACT_WARNING_TRIGGERS.has(lc.trigger)
+                                ? "text-amber-400"
+                                : CONTACT_SUCCESS_TRIGGERS.has(lc.trigger)
+                                  ? "text-green-400"
+                                  : "text-offwhite";
+                            const label = CONTACT_TRIGGER_LABELS[lc.trigger] ?? lc.trigger;
+                            const channelTag = lc.channel === "SMS" ? "SMS" : lc.channel === "EMAIL" ? "Email" : lc.channel;
+                            return (
+                              <div className="max-w-[160px]">
+                                <p className={`text-xs font-medium truncate ${tone}`}>{label}</p>
+                                <p className="text-[10px] text-carbon-light">
+                                  {channelTag} · {relativeDays(lc.sentAt)}
+                                </p>
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-xs text-carbon">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <StatusBadge status={borrower.overallStatus} size="sm" />
+                        {borrower.verificationState && (
+                          <div className="mt-1">
+                            <BorrowerVerificationBadge
+                              state={borrower.verificationState}
+                              lastVerifiedAt={borrower.lastVerifiedAt}
+                            />
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {issues.length > 0 ? (
@@ -551,6 +651,8 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
         open={addBorrowerOpen}
         onClose={() => setAddBorrowerOpen(false)}
         onComplete={() => fetchBorrowers()}
+        currentUserEmail={currentUser?.email ?? null}
+        currentUserDisplayName={currentUser?.displayName ?? null}
       />
     </div>
   );

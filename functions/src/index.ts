@@ -71,6 +71,7 @@ export {
 export { weeklyDataFeedDispatcher } from "./functions/data-feed-dispatcher";
 export { simulateVerificationSweep } from "./functions/simulate-verification-sweep";
 export { onOrgOnboardingComplete } from "./functions/onboarding-kickoff";
+export { getOrgVerificationStatus } from "./functions/get-org-verification-status";
 
 // Borrower Intake (magic link SMS workflow)
 export {

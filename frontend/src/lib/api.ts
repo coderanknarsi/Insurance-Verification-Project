@@ -125,11 +125,23 @@ export interface BorrowerWithVehicles {
     model: string;
     year: number;
     policy: PolicyData | null;
+    verificationState?: VerificationState;
+    lastVerifiedAt?: number | null;
   }>;
   overallStatus: "GREEN" | "YELLOW" | "RED";
   /** Most recent notification (any channel) sent to this borrower, if any. */
   lastContact?: LastContactSummary | null;
+  /** Worst lifecycle state across this borrower's vehicles. */
+  verificationState?: VerificationState;
+  /** Epoch ms of the most recent successful sweep across vehicles. */
+  lastVerifiedAt?: number | null;
 }
+
+export type VerificationState =
+  | "PENDING_UPLOAD"
+  | "INSURED_SUPPORTED"
+  | "INSURED_UNSUPPORTED"
+  | "INSURED_NO_CREDS";
 
 interface GetBorrowersResult {
   borrowers: BorrowerWithVehicles[];
@@ -264,6 +276,26 @@ export function callOnOrgOnboardingComplete(data: { organizationId: string }) {
   return httpsCallable<typeof data, OrgKickoffResult>(
     getClientFunctions(),
     "onOrgOnboardingComplete"
+  )(data);
+}
+
+export interface OrgVerificationStatus {
+  verificationDayOfWeek: 1 | 2 | 3 | 4 | 5;
+  isOverride: boolean;
+  nextSweepAt: number;
+  lastSweepAt: number | null;
+  inScopeCounts: {
+    pendingUpload: number;
+    insuredSupported: number;
+    insuredUnsupported: number;
+    insuredNoCreds: number;
+  };
+}
+
+export function callGetOrgVerificationStatus(data: { organizationId: string }) {
+  return httpsCallable<typeof data, OrgVerificationStatus>(
+    getClientFunctions(),
+    "getOrgVerificationStatus"
   )(data);
 }
 

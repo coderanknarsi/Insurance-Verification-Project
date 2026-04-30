@@ -28,6 +28,7 @@ import { VerificationsList } from "@/components/verifications-list";
 import { TeamSettings } from "@/components/team-settings";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { DemoWelcomeModal } from "@/components/demo-welcome-modal";
+import { DashboardHeaderStrip } from "@/components/dashboard-header-strip";
 import {
   callGetDemoToken,
   callGetComplianceRules,
@@ -445,6 +446,7 @@ export default function Home() {
 
           {activeNav === "dashboard" && organizationId && (
             <>
+              <DashboardHeaderStrip organizationId={organizationId} />
               <DashboardSummary
                 organizationId={organizationId}
                 onFilterChange={(f) => {
