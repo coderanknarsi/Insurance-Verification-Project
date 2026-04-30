@@ -70,6 +70,7 @@ export {
 // Data Feed Engine Dispatcher
 export { weeklyDataFeedDispatcher } from "./functions/data-feed-dispatcher";
 export { simulateVerificationSweep } from "./functions/simulate-verification-sweep";
+export { onOrgOnboardingComplete } from "./functions/onboarding-kickoff";
 
 // Borrower Intake (magic link SMS workflow)
 export {

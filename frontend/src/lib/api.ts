@@ -102,6 +102,13 @@ export interface PolicyData {
   insuranceCardUrl?: string;
 }
 
+export interface LastContactSummary {
+  trigger: string;
+  channel: string;
+  status: string;
+  sentAt: number;
+}
+
 export interface BorrowerWithVehicles {
   id: string;
   organizationId: string;
@@ -120,6 +127,8 @@ export interface BorrowerWithVehicles {
     policy: PolicyData | null;
   }>;
   overallStatus: "GREEN" | "YELLOW" | "RED";
+  /** Most recent notification (any channel) sent to this borrower, if any. */
+  lastContact?: LastContactSummary | null;
 }
 
 interface GetBorrowersResult {
@@ -140,6 +149,20 @@ export interface ComplianceRules {
   reminderDaysBeforeExpiry: number;
   /** IANA timezone for TCPA-style SMS quiet hours (8 AM – 9 PM local). */
   timezone?: string;
+  lapseEscalation?: {
+    firstNoticeDays: number;
+    secondNoticeDays: number;
+    finalNoticeDays: number;
+  };
+  coverageEscalation?: {
+    firstNoticeDays: number;
+    secondNoticeDays: number;
+    finalNoticeDays: number;
+  };
+  /** Emergency kill-switch — suppresses ALL borrower notifications when true. */
+  notificationsPaused?: boolean;
+  notificationsPausedAt?: { _seconds: number; _nanoseconds: number };
+  notificationsPausedReason?: string;
 }
 
 export type OrganizationType = "BHPH_DEALER" | "BANK" | "CREDIT_UNION" | "FINANCE_COMPANY";
@@ -222,6 +245,25 @@ export function callUpdateOrganizationProfile(data: {
   return httpsCallable<typeof data, { success: boolean; name: string; type: OrganizationType }>(
     getClientFunctions(),
     "updateOrganizationProfile"
+  )(data);
+}
+
+export interface OrgKickoffResult {
+  status: "queued" | "sent";
+  sentCount: number;
+  eligibleCount: number;
+  skipped: {
+    alreadyInsured: number;
+    recentlyContacted: number;
+    noContactMethod: number;
+    deliveryFailed: number;
+  };
+}
+
+export function callOnOrgOnboardingComplete(data: { organizationId: string }) {
+  return httpsCallable<typeof data, OrgKickoffResult>(
+    getClientFunctions(),
+    "onOrgOnboardingComplete"
   )(data);
 }
 
@@ -452,7 +494,11 @@ export interface VerificationRecord {
   sentAt: number | null;
 }
 
-export function callGetVerifications(data: { organizationId: string }) {
+export function callGetVerifications(data: {
+  organizationId: string;
+  borrowerId?: string;
+  limit?: number;
+}) {
   return httpsCallable<typeof data, { verifications: VerificationRecord[] }>(
     getClientFunctions(),
     "getVerifications"
@@ -662,8 +708,11 @@ export function callRequestBorrowerIntake(data: IntakeRequestInput) {
 export interface IntakeInfo {
   status: "PENDING" | "COMPLETED" | "EXPIRED";
   borrowerFirstName: string;
+  borrowerLastName?: string;
   vehicleLabel: string;
+  vehicleVin?: string;
   dealershipName: string;
+  organizationId?: string;
 }
 
 export function callGetIntakeInfo(data: { token: string }) {

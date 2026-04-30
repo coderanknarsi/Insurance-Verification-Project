@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -26,10 +27,12 @@ import { BillingSettings } from "@/components/billing-settings";
 import { VerificationsList } from "@/components/verifications-list";
 import { TeamSettings } from "@/components/team-settings";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
+import { DemoWelcomeModal } from "@/components/demo-welcome-modal";
 import {
   callGetDemoToken,
   callGetComplianceRules,
   callGetOrganizationProfile,
+  callOnOrgOnboardingComplete,
 } from "@/lib/api";
 import type {
   BorrowerWithVehicles,
@@ -61,6 +64,29 @@ export default function Home() {
   const [onboardingProfile, setOnboardingProfile] = useState<OrganizationProfile | null>(null);
   const [onboardingRules, setOnboardingRules] = useState<ComplianceRules | null>(null);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+
+  // Demo first-run welcome modal: show once per browser, gated to demo org.
+  const [demoWelcomeOpen, setDemoWelcomeOpen] = useState(false);
+  useEffect(() => {
+    if (organizationId !== "demo-org") return;
+    if (typeof window === "undefined") return;
+    const dismissed = localStorage.getItem("demoWelcomeDismissed") === "true";
+    if (!dismissed) setDemoWelcomeOpen(true);
+  }, [organizationId]);
+
+  // Demo guidance: a prospect on demo-org with no test borrower yet should see
+  // a locked-down sidebar (Dashboard only) until they add their first borrower.
+  // Once any TEST- borrower exists, unlock everything.
+  const hasTestBorrower = allBorrowers.some(
+    (b) => typeof b.loanNumber === "string" && b.loanNumber.startsWith("TEST-"),
+  );
+  const isDemo = organizationId === "demo-org";
+  const lockedNavs = isDemo && !hasTestBorrower ? ["verifications", "team", "billing", "settings"] : [];
+
+  // If they were viewing a now-locked tab, kick them back to dashboard.
+  useEffect(() => {
+    if (lockedNavs.includes(activeNav)) setActiveNav("dashboard");
+  }, [lockedNavs, activeNav]);
 
   const friendlyAuthError = (err: unknown): string => {
     const msg = err instanceof Error ? err.message : "";
@@ -334,6 +360,21 @@ export default function Home() {
           onComplete={() => {
             setOnboardingProfile({ ...onboardingProfile, onboardingCompleted: true });
             setRefreshKey((k) => k + 1);
+            // Fan out intake requests to borrowers without uploaded insurance.
+            callOnOrgOnboardingComplete({ organizationId })
+              .then(({ data }) => {
+                if (data.status === "queued") {
+                  toast.success("Onboarding complete — intake messages queued for business hours.");
+                } else if (data.sentCount > 0) {
+                  toast.success(`Onboarding complete — sent ${data.sentCount} insurance request${data.sentCount === 1 ? "" : "s"}.`);
+                } else {
+                  toast.success("Onboarding complete.");
+                }
+              })
+              .catch((err) => {
+                console.error("[onboarding-kickoff] failed", err);
+                toast.error("Onboarding saved, but kickoff messages couldn't be sent. We'll retry tomorrow.");
+              });
           }}
         />
       )}
@@ -343,6 +384,8 @@ export default function Home() {
         onSignOut={handleSignOut}
         activeNav={activeNav}
         onNavChange={setActiveNav}
+        lockedNavs={lockedNavs}
+        lockedHint="Add your first test borrower to unlock"
       />
 
       {/* Main Content */}
@@ -374,16 +417,29 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <Play className="w-4 h-4 text-blue-400" />
                 <p className="text-sm text-blue-200">
-                  You&apos;re exploring a demo account with sample data.
+                  {hasTestBorrower
+                    ? "You\u2019re exploring a demo account with sample data."
+                    : "Demo mode \u2014 click Add Borrower below to walk through the full flow with your own info."}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => { signOut(getClientAuth()); setTimeout(() => { window.location.href = "/?mode=signup"; }, 500); }}
-                className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap"
-              >
-                Sign Up for Free Trial &rarr;
-              </button>
+              <div className="flex items-center gap-3">
+                {!hasTestBorrower && (
+                  <button
+                    type="button"
+                    onClick={() => setDemoWelcomeOpen(true)}
+                    className="text-xs text-blue-300/80 hover:text-blue-200 underline transition-colors"
+                  >
+                    Show me how
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { signOut(getClientAuth()); setTimeout(() => { window.location.href = "/?mode=signup"; }, 500); }}
+                  className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap"
+                >
+                  Sign Up for Free Trial &rarr;
+                </button>
+              </div>
             </div>
           )}
 
@@ -405,6 +461,7 @@ export default function Home() {
                   externalFilter={borrowerFilter}
                   onFilterChange={setBorrowerFilter}
                   refreshKey={refreshKey}
+                  spotlightAddBorrower={isDemo && !hasTestBorrower}
                 />
               </div>
             </>
@@ -439,6 +496,23 @@ export default function Home() {
           />
         </>
       )}
+
+      {/* Demo first-run welcome */}
+      <DemoWelcomeModal
+        open={demoWelcomeOpen}
+        onClose={() => {
+          setDemoWelcomeOpen(false);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("demoWelcomeDismissed", "true");
+          }
+        }}
+        onTryIt={() => {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("open-add-borrower"));
+            localStorage.setItem("demoWelcomeDismissed", "true");
+          }
+        }}
+      />
     </div>
   );
 }

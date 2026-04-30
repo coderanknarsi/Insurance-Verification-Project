@@ -9,6 +9,7 @@ import {
 } from "../services/verification-eligibility";
 import { CadenceMode, shouldRemindAt } from "../services/expiry-cadence";
 import { getLenderAlertEmail } from "../services/lender-email";
+import { kickoffOrgIntake } from "./onboarding-kickoff";
 import { db } from "../config/firebase";
 import {
   NotificationType,
@@ -40,6 +41,22 @@ export const dailyExpiryReminder = onSchedule(
     const orgsSnap = await collections.organizations.get();
     let totalSent = 0;
     let totalFailed = 0;
+
+    // ─── Flush any orgs whose kickoff was deferred to quiet hours ─
+    const pendingSnap = await collections.organizations
+      .where("kickoffPendingAt", "!=", null)
+      .get();
+    for (const orgDoc of pendingSnap.docs) {
+      if (orgDoc.id === DEMO_ORG_ID) continue;
+      try {
+        const result = await kickoffOrgIntake(orgDoc.id, /*forceSend*/ true);
+        logger.info(
+          `[kickoff-flush] org=${orgDoc.id} sent=${result.sentCount}`,
+        );
+      } catch (err) {
+        logger.warn(`[kickoff-flush] org=${orgDoc.id} failed`, err);
+      }
+    }
 
     for (const orgDoc of orgsSnap.docs) {
       if (orgDoc.id === DEMO_ORG_ID) continue;
