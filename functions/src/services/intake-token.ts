@@ -2,7 +2,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { randomUUID } from "crypto";
 import { db } from "../config/firebase";
 import { collections } from "../config/firestore";
-import { sendSms, intakeRequestSmsText, isWithinSendingHours } from "./telnyx";
+import { sendSms, intakeRequestSmsText, intakeReminderSmsText, isWithinSendingHours } from "./telnyx";
 import { sendIntakeRequestEmail } from "./email";
 import { SmsConsentStatus } from "../types/borrower";
 import {
@@ -32,6 +32,8 @@ export interface IntakeNotifyInput {
   policyId: string;
   dealershipName: string;
   orgTimezone?: string;
+  /** "request" (default) for the first ask, "reminder" for follow-ups. */
+  kind?: "request" | "reminder";
 }
 
 export interface IntakeNotifyResult {
@@ -57,6 +59,8 @@ export async function createIntakeTokenAndNotify(
   input: IntakeNotifyInput,
 ): Promise<IntakeNotifyResult> {
   const { organizationId, borrower, vehicleId, vehicleLabel, policyId, dealershipName, orgTimezone } = input;
+  const kind = input.kind ?? "request";
+  const isReminder = kind === "reminder";
 
   const hasSmsConsent =
     !!borrower.phone && borrower.smsConsentStatus === SmsConsentStatus.OPTED_IN;
@@ -106,12 +110,9 @@ export async function createIntakeTokenAndNotify(
   let emailError: string | null = null;
 
   if (canSms) {
-    const smsText = intakeRequestSmsText(
-      borrower.firstName,
-      vehicleLabel,
-      dealershipName,
-      intakeUrl,
-    );
+    const smsText = isReminder
+      ? intakeReminderSmsText(borrower.firstName, vehicleLabel, dealershipName, intakeUrl)
+      : intakeRequestSmsText(borrower.firstName, vehicleLabel, dealershipName, intakeUrl);
     const r = await sendSms(borrower.phone!, smsText);
     smsSent = r.success;
     if (!r.success) smsError = r.error ?? "SMS send failed";
@@ -143,9 +144,11 @@ export async function createIntakeTokenAndNotify(
     organizationId,
     borrowerId: borrower.id,
     type: smsSent ? NotificationType.SMS : NotificationType.EMAIL,
-    trigger: NotificationTrigger.INTAKE_REQUESTED,
+    trigger: isReminder
+      ? NotificationTrigger.INTAKE_REMINDER
+      : NotificationTrigger.INTAKE_REQUESTED,
     status: delivered ? NotificationStatus.SENT : NotificationStatus.FAILED,
-    content: `Insurance verification request sent to ${borrower.firstName} ${borrower.lastName}`,
+    content: `${isReminder ? "Insurance reminder" : "Insurance verification request"} sent to ${borrower.firstName} ${borrower.lastName}`,
     createdAt: now,
     ...(delivered && { sentAt: now }),
     ...(!delivered && {

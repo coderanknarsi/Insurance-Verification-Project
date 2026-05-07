@@ -55,7 +55,7 @@ describe("getPolicyVerificationState", () => {
 
   it("returns INSURED_UNSUPPORTED for non-supported carriers", () => {
     const state = getPolicyVerificationState(
-      { insuranceProvider: "GEICO", status: "ACTIVE" } as never,
+      { insuranceProvider: "Farmers", status: "ACTIVE" } as never,
       orgId,
       new Set([supportedCarrier]),
     );

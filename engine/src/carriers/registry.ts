@@ -3,6 +3,8 @@ import { ProgressiveModule } from "./progressive/module.js";
 import { NationalGeneralModule } from "./national-general/module.js";
 import { StateFarmModule } from "./state-farm/module.js";
 import { AllstateModule } from "./allstate/module.js";
+import { NationwideModule } from "./nationwide/module.js";
+import { GeicoModule } from "./geico/module.js";
 
 /** Registry of all available carrier modules */
 const modules: Map<string, CarrierModule> = new Map();
@@ -16,6 +18,8 @@ register(new ProgressiveModule());
 register(new NationalGeneralModule());
 register(new StateFarmModule());
 register(new AllstateModule());
+register(new NationwideModule());
+register(new GeicoModule());
 
 /**
  * Look up a carrier module by name.

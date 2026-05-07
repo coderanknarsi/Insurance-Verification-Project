@@ -11,6 +11,8 @@ export const SUPPORTED_CARRIERS = [
   "allstate",
   "state_farm",
   "national_general",
+  "nationwide",
+  "geico",
 ] as const;
 
 export type SupportedCarrier = (typeof SUPPORTED_CARRIERS)[number];

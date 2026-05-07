@@ -14,6 +14,9 @@ const SUPPORTED_CARRIERS = [
   { id: "progressive", name: "Progressive (PROVE)" },
   { id: "state_farm", name: "State Farm (B2B)" },
   { id: "allstate", name: "Allstate (AXCIS)" },
+  { id: "national_general", name: "National General (Lienholder Portal)" },
+  { id: "nationwide", name: "Nationwide (Policy Inquiry)" },
+  { id: "geico", name: "GEICO (B2B Lienholder Portal)" },
 ];
 
 interface CarrierCredentialSettingsProps {

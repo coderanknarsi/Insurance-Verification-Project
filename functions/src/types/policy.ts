@@ -129,6 +129,20 @@ export interface Policy {
   lastVerificationAttempt?: Timestamp;
   lastVerificationError?: string;
   manualReviewRequired?: boolean;
+  /**
+   * Anchor for the lapse cadence. Set the first time the policy enters a
+   * lapsed state (CANCELLED/EXPIRED/RESCINDED) by daily-lapse-auto-request.
+   * Cleared (deleted) when policy returns to ACTIVE / awaitingCredentials=false.
+   * Used by daily-compliance-escalation to schedule T+10 / T+20 notices.
+   */
+  lapseDetectedAt?: Timestamp;
+  /**
+   * Anchor for the coverage cure cadence. Set the first time the policy is
+   * detected as having coverage compliance issues (deductible too high,
+   * lienholder missing, etc) while still being ACTIVE. Cleared when issues
+   * resolve. Used by daily-compliance-escalation for T+1 / T+14 / T+30 notices.
+   */
+  coverageIssueDetectedAt?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

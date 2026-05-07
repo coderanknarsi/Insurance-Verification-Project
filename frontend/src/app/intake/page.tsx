@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2, Upload, CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Loader2, Upload, CheckCircle, AlertTriangle, ShieldCheck, Download, FlaskConical } from "lucide-react";
 
 const COMMON_CARRIERS = [
   "State Farm", "GEICO", "Progressive", "Allstate", "USAA",
@@ -15,6 +15,108 @@ const COMMON_CARRIERS = [
   "Travelers", "Erie Insurance", "National General", "The Hartford",
   "Auto-Owners", "Country Financial", "Shelter Insurance",
 ];
+
+/**
+ * Renders a personalized sample insurance card to a canvas and triggers a
+ * download of the PNG. Used in demo mode so the dealer testing the flow has
+ * a doc that satisfies our intake validators (matching name, VIN, future
+ * expiration, dealership as lienholder).
+ */
+function downloadSampleInsuranceCard(args: {
+  borrowerFirstName: string;
+  borrowerLastName: string;
+  vehicleLabel: string;
+  vehicleVin: string;
+  dealershipName: string;
+}) {
+  const W = 1000;
+  const H = 600;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Background
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+
+  // Header band
+  ctx.fillStyle = "#1e3a8a";
+  ctx.fillRect(0, 0, W, 90);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 32px Arial";
+  ctx.fillText("DEMO INSURANCE COMPANY", 40, 58);
+  ctx.font = "16px Arial";
+  ctx.fillText("Auto Insurance ID Card — SAMPLE FOR TESTING", 40, 80);
+
+  // Body
+  ctx.fillStyle = "#000000";
+  ctx.font = "bold 18px Arial";
+
+  const today = new Date();
+  const eff = new Date(today);
+  eff.setMonth(eff.getMonth() - 3);
+  const exp = new Date(today);
+  exp.setMonth(exp.getMonth() + 9);
+  const fmt = (d: Date) => `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+
+  const policyNum = `DEMO-${Math.floor(Math.random() * 900000 + 100000)}`;
+
+  const rows: [string, string][] = [
+    ["Policy Number:", policyNum],
+    ["Insured:", `${args.borrowerFirstName} ${args.borrowerLastName}`.trim()],
+    ["Vehicle:", args.vehicleLabel],
+    ["VIN:", args.vehicleVin],
+    ["Effective Date:", fmt(eff)],
+    ["Expiration Date:", fmt(exp)],
+    ["Coverage:", "Liability • Collision ($500) • Comprehensive ($250)"],
+    ["Lienholder:", args.dealershipName],
+  ];
+
+  let y = 150;
+  for (const [label, value] of rows) {
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "14px Arial";
+    ctx.fillText(label, 40, y);
+    ctx.fillStyle = "#111827";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText(value, 240, y);
+    y += 42;
+  }
+
+  // Footer
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = "italic 12px Arial";
+  ctx.fillText("This is a sample document generated for demonstration purposes only.", 40, H - 30);
+
+  // Diagonal "SAMPLE — NOT VALID" watermark across the entire card so the
+  // image cannot be mistaken for a genuine insurance ID card.
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(-Math.PI / 7);
+  ctx.font = "bold 140px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(220, 38, 38, 0.28)";
+  ctx.fillText("SAMPLE — NOT VALID", 0, -40);
+  ctx.font = "bold 36px Arial";
+  ctx.fillStyle = "rgba(220, 38, 38, 0.5)";
+  ctx.fillText("FOR DEMO/TESTING ONLY", 0, 60);
+  ctx.restore();
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sample-insurance-card-${args.borrowerLastName || "demo"}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
 
 type PageState = "loading" | "form" | "submitting" | "success" | "error" | "expired" | "completed";
 
@@ -39,6 +141,7 @@ function IntakePageInner() {
   const [pageState, setPageState] = useState<PageState>("loading");
   const [info, setInfo] = useState<IntakeInfo | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [rejectionMsg, setRejectionMsg] = useState("");
 
   // Form fields
   const [insuranceProvider, setInsuranceProvider] = useState("");
@@ -101,6 +204,7 @@ function IntakePageInner() {
 
     setPageState("submitting");
     setErrorMsg("");
+    setRejectionMsg("");
 
     try {
       let insuranceCardBase64: string | undefined;
@@ -127,6 +231,15 @@ function IntakePageInner() {
 
       setPageState("success");
     } catch (err) {
+      // Firebase HttpsError with code "failed-precondition" → validation rejection.
+      // We surface a styled rejection panel with the user-friendly message instead
+      // of a generic error, so the borrower knows what to do.
+      const fbErr = err as { code?: string; message?: string };
+      if (fbErr?.code === "functions/failed-precondition" || fbErr?.code === "failed-precondition") {
+        setRejectionMsg(fbErr.message ?? "We couldn't accept this document.");
+        setPageState("form");
+        return;
+      }
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setPageState("form");
     }
@@ -204,6 +317,41 @@ function IntakePageInner() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {info.organizationId === "demo-org" && (
+                <div className="mb-5 p-4 rounded-lg border border-blue-500/40 bg-blue-500/10">
+                  <div className="flex items-start gap-3">
+                    <FlaskConical className="w-5 h-5 text-blue-300 shrink-0 mt-0.5" />
+                    <div className="space-y-2 flex-1">
+                      <p className="text-sm font-medium text-blue-100">
+                        Demo mode — try it with a sample card
+                      </p>
+                      <p className="text-xs text-blue-200/80 leading-relaxed">
+                        Don&apos;t have an insurance card handy? Download a personalized
+                        sample card with matching name, VIN, and lienholder so you can
+                        test the upload flow end-to-end.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          downloadSampleInsuranceCard({
+                            borrowerFirstName: info.borrowerFirstName,
+                            borrowerLastName: info.borrowerLastName ?? "",
+                            vehicleLabel: info.vehicleLabel,
+                            vehicleVin: info.vehicleVin ?? "",
+                            dealershipName: info.dealershipName,
+                          })
+                        }
+                        className="border-blue-400/40 bg-blue-500/10 text-blue-100 hover:bg-blue-500/20 hover:text-white"
+                      >
+                        <Download className="w-3.5 h-3.5 mr-1.5" />
+                        Download sample insurance card
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               <form onSubmit={handleSubmit} className="space-y-5">
                 {/* Insurance Provider */}
                 <div className="space-y-2">
@@ -297,6 +445,27 @@ function IntakePageInner() {
                     </Button>
                   )}
                 </div>
+
+                {rejectionMsg && (
+                  <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-red-300">
+                          We couldn&apos;t accept this document
+                        </p>
+                        {rejectionMsg.split("\n\n").map((line, idx) => (
+                          <p key={idx} className="text-sm text-red-200/90 whitespace-pre-line">
+                            {line}
+                          </p>
+                        ))}
+                        <p className="text-xs text-red-300/80 pt-1">
+                          Please re-upload the correct document below.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {errorMsg && (
                   <p className="text-sm text-red-400">{errorMsg}</p>

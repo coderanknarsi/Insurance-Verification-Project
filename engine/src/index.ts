@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import type { Request, Response, NextFunction } from "express";
+import * as crypto from "crypto";
 import { launchBrowser } from "./browser/index.js";
 import { agentLoop } from "./agent/loop.js";
 import { getCarrierModule } from "./carriers/registry.js";
@@ -9,9 +11,38 @@ import type { VerificationBatch, BatchResult, VerificationResult } from "./types
 import { PolicyStatus } from "./types/index.js";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 const PORT = parseInt(process.env.PORT ?? "8080", 10);
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const ENGINE_SHARED_SECRET = process.env.ENGINE_SHARED_SECRET ?? "";
+
+/**
+ * Defense-in-depth auth: require a shared secret header on verification routes.
+ * Cloud Run IAM is the primary gate; this guards against IAM misconfiguration
+ * and against any future internal callers that don't use Google ID tokens.
+ */
+function requireSharedSecret(req: Request, res: Response, next: NextFunction): void {
+  if (!IS_PRODUCTION && !ENGINE_SHARED_SECRET) {
+    // Dev mode without secret configured — allow but log loudly.
+    console.warn("[auth] ENGINE_SHARED_SECRET not set; allowing request (dev mode)");
+    next();
+    return;
+  }
+  if (!ENGINE_SHARED_SECRET) {
+    console.error("[auth] ENGINE_SHARED_SECRET not configured in production");
+    res.status(500).json({ error: "engine not configured" });
+    return;
+  }
+  const provided = req.header("x-engine-secret") || "";
+  const a = Buffer.from(provided);
+  const b = Buffer.from(ENGINE_SHARED_SECRET);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  next();
+}
 
 /** Health check for Cloud Run */
 app.get("/health", (_req, res) => {
@@ -24,7 +55,7 @@ app.get("/health", (_req, res) => {
  * Launches a browser session, logs into the carrier portal once,
  * then processes each policy sequentially within that session.
  */
-app.post("/verify", async (req, res) => {
+app.post("/verify", requireSharedSecret, async (req, res) => {
   const batch = req.body as VerificationBatch;
 
   if (!batch?.policies?.length || !batch.carrier) {
@@ -161,11 +192,11 @@ app.post("/verify", async (req, res) => {
 
 /**
  * POST /verify-test
- * Same as /verify but accepts inline credentials in the request body.
- * Used for local smoke testing when Firestore ADC is unavailable.
- * Should NOT be exposed in production.
+ * Development-only smoke test endpoint. Accepts inline credentials.
+ * Disabled when NODE_ENV === "production".
  */
-app.post("/verify-test", async (req, res) => {
+if (!IS_PRODUCTION) {
+  app.post("/verify-test", requireSharedSecret, async (req, res) => {
   const { carrier, vin, policyNumber, credentials } = req.body as {
     carrier: string;
     vin: string;
@@ -233,7 +264,8 @@ app.post("/verify-test", async (req, res) => {
   } finally {
     await session?.close();
   }
-});
+  });
+}
 
 import { isDirectSearchCapable } from "./carriers/types.js";
 import { SessionExpiredError } from "./carriers/progressive/module.js";
@@ -243,7 +275,7 @@ import { SessionExpiredError } from "./carriers/progressive/module.js";
  * Hybrid verification: AI login once → direct HTTP search for each policy.
  * Much faster than full AI search — one login handles hundreds of policies.
  */
-app.post("/verify-hybrid", async (req, res) => {
+app.post("/verify-hybrid", requireSharedSecret, async (req, res) => {
   const batch = req.body as VerificationBatch;
 
   if (!batch?.policies?.length || !batch.carrier) {

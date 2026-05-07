@@ -41,6 +41,15 @@
       ]
     },
     {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "borrowerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "borrowers",
       "queryScope": "COLLECTION",
       "fields": [
@@ -70,6 +79,32 @@
       "fields": [
         { "fieldPath": "vehicleId", "order": "ASCENDING" },
         { "fieldPath": "organizationId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "staffTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "staffTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizationId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "borrowerId", "order": "ASCENDING" },
+        { "fieldPath": "trigger", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],

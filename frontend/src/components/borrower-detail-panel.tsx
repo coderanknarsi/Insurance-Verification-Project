@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { X, Shield, Car, FileText, AlertTriangle, Clock, Phone, Mail, User, Pencil, Trash2, Check, Loader2, MessageSquare, Image } from "lucide-react";
+import { X, Shield, Car, FileText, AlertTriangle, Clock, Phone, Mail, User, Pencil, Trash2, Check, Loader2, MessageSquare, Image, History, Send } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
-import { callUpdateBorrower, callDeleteBorrower } from "@/lib/api";
+import { BorrowerCommunicationTimeline } from "@/components/borrower-communication-timeline";
+import { callUpdateBorrower, callDeleteBorrower, callDealerSubmitInsurance } from "@/lib/api";
 import type { BorrowerWithVehicles, PolicyData } from "@/lib/api";
 
 interface BorrowerDetailPanelProps {
@@ -236,6 +237,44 @@ export function BorrowerDetailPanel({ borrower, onClose, onUpdated, onDeleted }:
   // Delete state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Dealer-assisted submit state ("Complete for borrower")
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitFields, setSubmitFields] = useState({
+    insuranceProvider: "",
+    policyNumber: "",
+  });
+
+  const awaitingCreds =
+    !!policy?.awaitingCredentials || issues.includes("AWAITING_CREDENTIALS");
+
+  const handleDealerSubmit = async () => {
+    if (!policy?.id || !vehicle?.id) return;
+    if (!submitFields.insuranceProvider.trim() || !submitFields.policyNumber.trim()) {
+      setSubmitError("Carrier name and policy number are required.");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await callDealerSubmitInsurance({
+        organizationId: borrower.organizationId,
+        policyId: policy.id,
+        vehicleId: vehicle.id,
+        insuranceProvider: submitFields.insuranceProvider.trim(),
+        policyNumber: submitFields.policyNumber.trim(),
+      });
+      setShowSubmitForm(false);
+      setSubmitFields({ insuranceProvider: "", policyNumber: "" });
+      onUpdated?.();
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Submission failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -516,6 +555,87 @@ export function BorrowerDetailPanel({ borrower, onClose, onUpdated, onDeleted }:
             </a>
           </Section>
         )}
+
+        {/* Dealer-assisted submit — when borrower hasn't provided info yet */}
+        {awaitingCreds && (
+          <Section title="Complete for borrower" icon={Send}>
+            <p className="text-[11px] text-carbon-light mb-2 leading-relaxed">
+              Borrower hasn't submitted their insurance yet. If they shared
+              their carrier and policy number with you directly, you can enter
+              it below to move them to verified.
+            </p>
+            {!showSubmitForm ? (
+              <button
+                onClick={() => setShowSubmitForm(true)}
+                className="w-full px-3 py-2 text-xs font-medium rounded-md bg-accent/10 border border-accent/20 text-accent hover:bg-accent/15 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Send className="w-3 h-3" />
+                Enter insurance for this borrower
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[10px] text-carbon-light mb-0.5 block">
+                    Insurance Carrier
+                  </label>
+                  <input
+                    value={submitFields.insuranceProvider}
+                    onChange={(e) =>
+                      setSubmitFields({ ...submitFields, insuranceProvider: e.target.value })
+                    }
+                    placeholder="e.g. State Farm, Progressive, Allstate"
+                    className="w-full px-2 py-1.5 text-xs bg-surface border border-border-subtle rounded-md text-offwhite focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-carbon-light mb-0.5 block">
+                    Policy Number
+                  </label>
+                  <input
+                    value={submitFields.policyNumber}
+                    onChange={(e) =>
+                      setSubmitFields({ ...submitFields, policyNumber: e.target.value })
+                    }
+                    placeholder="As shown on the insurance card"
+                    className="w-full px-2 py-1.5 text-xs bg-surface border border-border-subtle rounded-md text-offwhite focus:outline-none focus:border-accent"
+                  />
+                </div>
+                {submitError && (
+                  <p className="text-[10px] text-red-400">{submitError}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleDealerSubmit}
+                    disabled={submitting}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-white hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                    {submitting ? "Submitting..." : "Submit"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowSubmitForm(false);
+                      setSubmitError(null);
+                      setSubmitFields({ insuranceProvider: "", policyNumber: "" });
+                    }}
+                    disabled={submitting}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-surface text-carbon-light hover:bg-border-subtle"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </Section>
+        )}
+
+        {/* Communication History — emails, texts, lapse notices, reminders */}
+        <Section title="Communication History" icon={History}>
+          <BorrowerCommunicationTimeline
+            organizationId={borrower.organizationId}
+            borrowerId={borrower.id}
+          />
+        </Section>
 
         {/* Policy Details */}
         {policy ? (

@@ -300,10 +300,15 @@ function currentChicagoWeekday(): 1 | 2 | 3 | 4 | 5 | null {
 async function sendBatchToEngine(batch: VerificationBatch): Promise<void> {
   const auth = new GoogleAuth();
   const client = await auth.getIdTokenClient(ENGINE_URL);
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const sharedSecret = process.env.ENGINE_SHARED_SECRET ?? "";
+  if (sharedSecret) {
+    headers["x-engine-secret"] = sharedSecret;
+  }
   const response = await client.request({
     url: `${ENGINE_URL}/verify`,
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(batch),
   });
 

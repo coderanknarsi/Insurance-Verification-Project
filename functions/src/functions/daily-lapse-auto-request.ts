@@ -47,7 +47,7 @@ export const dailyLapseAutoRequest = onSchedule(
       const rules = org.settings?.complianceRules;
 
       // Skip if auto-reminders are disabled for this org
-      if (!rules?.autoSendReminder) continue;
+      if (!rules || rules.notificationsPaused) continue;
 
       const orgTimezone: string | undefined = rules.timezone;
 
@@ -171,9 +171,13 @@ export const dailyLapseAutoRequest = onSchedule(
           createdAt: Timestamp.now(),
         });
 
-        // Mark policy as awaiting new credentials
+        // Mark policy as awaiting new credentials and anchor the lapse cadence.
+        // lapseDetectedAt is the T0 used by daily-compliance-escalation for T+10/T+20.
         await collections.policies.doc(policyDoc.id).update({
           awaitingCredentials: true,
+          ...(policy.lapseDetectedAt
+            ? {}
+            : { lapseDetectedAt: Timestamp.now() }),
           complianceIssues: [
             ...(policy.complianceIssues ?? []).filter(
               (i: string) => i !== ComplianceIssue.AWAITING_CREDENTIALS,

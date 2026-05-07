@@ -1,9 +1,11 @@
 // Phase 2: Data Ingestion
 export { ingestDealData } from "./functions/ingest-deal-data";
 export { bulkImportDeals } from "./functions/bulk-import";
+export { extractCustomersFromFile } from "./functions/extract-customers";
 export { getBorrowers, getDashboardSummary } from "./functions/get-borrowers";
 export { updateBorrower } from "./functions/update-borrower";
 export { deleteBorrower } from "./functions/delete-borrower";
+export { getStaffTasks, resolveStaffTask } from "./functions/staff-tasks";
 
 // Auth: User bootstrap
 export { getUserProfile } from "./functions/get-user-profile";
@@ -30,6 +32,7 @@ export { getOrganizationProfile, updateOrganizationProfile } from "./functions/o
 export { dailyExpiryReminder } from "./functions/daily-expiry-reminder";
 export { dailyLapseAutoRequest } from "./functions/daily-lapse-auto-request";
 export { dailyComplianceEscalation } from "./functions/daily-compliance-escalation";
+export { dailyIntakeReminder } from "./functions/daily-intake-reminder";
 
 // Phase 6: Stripe Billing
 export {

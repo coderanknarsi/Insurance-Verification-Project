@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { admin, db } from "../config/firebase";
 import { collections } from "../config/firestore";
 import { requireAuth, requireRole, requireOrg } from "../middleware/auth";
+import { rateLimit } from "../middleware/rate-limit";
 import { UserRole } from "../types/user";
 import { ComplianceIssue, PolicyStatus, DashboardStatus, CoverageItem, CoverageDeductible, Policy } from "../types/policy";
 import { SmsConsentStatus } from "../types/borrower";
@@ -15,10 +16,45 @@ import { getLenderAlertEmail } from "../services/lender-email";
 import { logger } from "firebase-functions/v2";
 import { DEMO_ORG_ID } from "../constants";
 void DEMO_ORG_ID;
-import { NotificationType, NotificationTrigger, NotificationStatus } from "../types/notification";
+import { NotificationType, NotificationTrigger, NotificationStatus, NotificationChannel } from "../types/notification";
 
 const INTAKE_URL_BASE = "https://app.autolientracker.com/intake";
 const TOKEN_EXPIRY_DAYS = 7;
+
+// Upload limits — enforced server-side regardless of client checks.
+const MAX_INSURANCE_CARD_BYTES = 8 * 1024 * 1024; // 8 MB
+
+interface DetectedUpload {
+  contentType: "image/jpeg" | "image/png" | "image/gif" | "application/pdf";
+  ext: "jpg" | "png" | "gif" | "pdf";
+}
+
+/**
+ * Validate a base64-encoded insurance card upload. Throws HttpsError for
+ * size or unsupported content. Returns detected content-type/extension.
+ */
+function validateInsuranceCardUpload(base64: string): DetectedUpload {
+  // Strip data URI prefix if present (defensive — clients shouldn't send it).
+  const clean = base64.replace(/^data:[^;]+;base64,/, "");
+  // Approx decoded length: base64 length * 3/4, minus padding.
+  const padding = clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0;
+  const decodedBytes = Math.floor((clean.length * 3) / 4) - padding;
+  if (decodedBytes > MAX_INSURANCE_CARD_BYTES) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Insurance card file is too large. Max 8 MB.",
+    );
+  }
+
+  if (clean.startsWith("/9j/")) return { contentType: "image/jpeg", ext: "jpg" };
+  if (clean.startsWith("iVBOR")) return { contentType: "image/png", ext: "png" };
+  if (clean.startsWith("JVBER")) return { contentType: "application/pdf", ext: "pdf" };
+  if (clean.startsWith("R0lGO")) return { contentType: "image/gif", ext: "gif" };
+  throw new HttpsError(
+    "invalid-argument",
+    "Unsupported file format. Please upload a JPG, PNG, GIF, or PDF.",
+  );
+}
 
 // ─── Shared Helper: Apply OCR fields to policy update ───────
 
@@ -230,6 +266,12 @@ export const requestBorrowerIntake = onCall(async (request) => {
   const canEmail = !!borrower.email;
 
   if (!canSms && !canEmail) {
+    if (smsSuppressedReason === "QUIET_HOURS") {
+      throw new HttpsError(
+        "failed-precondition",
+        `SMS is paused until 8 AM ${orgTimezone ?? "local time"} (TCPA quiet hours), and this borrower has no email fallback.`,
+      );
+    }
     throw new HttpsError(
       "failed-precondition",
       "Borrower has no reachable contact method. Add a phone number with SMS consent or an email address.",
@@ -303,20 +345,46 @@ export const requestBorrowerIntake = onCall(async (request) => {
     emailSent,
   });
 
-  // Log notification for Verifications tab
-  const channelType = smsSent ? NotificationType.SMS : NotificationType.EMAIL;
-  const notifStatus = delivered ? NotificationStatus.SENT : NotificationStatus.FAILED;
-  await collections.notifications.doc().set({
-    organizationId: data.organizationId,
-    borrowerId: data.borrowerId,
-    type: channelType,
-    trigger: NotificationTrigger.INTAKE_REQUESTED,
-    status: notifStatus,
-    content: `Insurance verification request sent to ${borrower.firstName} ${borrower.lastName}`,
-    createdAt: now,
-    ...(delivered && { sentAt: now }),
-    ...(!delivered && { errorCode: emailError ?? smsError ?? "Delivery failed" }),
-  });
+  // Log notifications per channel so the dashboard can distinguish Email vs SMS.
+  if (emailSent || emailError) {
+    await collections.notifications.doc().set({
+      organizationId: data.organizationId,
+      borrowerId: data.borrowerId,
+      type: NotificationType.EMAIL,
+      channel: NotificationChannel.EMAIL,
+      trigger: NotificationTrigger.INTAKE_REQUESTED,
+      status: emailSent ? NotificationStatus.SENT : NotificationStatus.FAILED,
+      content: emailSent
+        ? `Insurance verification request emailed to ${borrower.firstName} ${borrower.lastName}`
+        : `Insurance verification email failed for ${borrower.firstName} ${borrower.lastName}`,
+      createdAt: now,
+      ...(emailSent && { sentAt: now }),
+      ...(emailError && { errorCode: emailError }),
+    });
+  }
+  if (smsSent || smsError || smsSuppressedReason) {
+    const smsErrorCode = smsError ?? smsSuppressedReason ?? undefined;
+    await collections.notifications.doc().set({
+      organizationId: data.organizationId,
+      borrowerId: data.borrowerId,
+      type: NotificationType.SMS,
+      channel: NotificationChannel.SMS,
+      trigger: NotificationTrigger.INTAKE_REQUESTED,
+      status: smsSent
+        ? NotificationStatus.SENT
+        : smsSuppressedReason
+          ? NotificationStatus.PENDING
+          : NotificationStatus.FAILED,
+      content: smsSent
+        ? `Insurance verification request texted to ${borrower.firstName} ${borrower.lastName}`
+        : smsSuppressedReason
+          ? `Insurance verification SMS paused for ${borrower.firstName} ${borrower.lastName} until quiet hours end`
+          : `Insurance verification SMS failed for ${borrower.firstName} ${borrower.lastName}`,
+      createdAt: now,
+      ...(smsSent && { sentAt: now }),
+      ...(smsErrorCode && { errorCode: smsErrorCode }),
+    });
+  }
 
   return {
     token,
@@ -342,6 +410,9 @@ export const getIntakeInfo = onCall(async (request) => {
   if (!data.token) {
     throw new HttpsError("invalid-argument", "token is required.");
   }
+
+  // Light rate limit per token to throttle scraping/probing.
+  rateLimit(`getIntakeInfo:${data.token}`, { windowMs: 60_000, max: 30 });
 
   const tokenDoc = await db.collection("intakeTokens").doc(data.token).get();
   if (!tokenDoc.exists) {
@@ -408,8 +479,19 @@ export const submitBorrowerIntake = onCall(
       throw new HttpsError("invalid-argument", "token is required.");
     }
 
+    // Best-effort rate limit per token to throttle abuse on this public endpoint.
+    rateLimit(`submitBorrowerIntake:${data.token}`, { windowMs: 60_000, max: 10 });
+
     if (!data.insuranceProvider && !data.policyNumber && !data.insuranceCardBase64) {
       throw new HttpsError("invalid-argument", "Please provide your insurance carrier and policy number, or upload a photo of your insurance card.");
+    }
+
+    // Reasonable string-length caps.
+    if (
+      (data.insuranceProvider && data.insuranceProvider.length > 200) ||
+      (data.policyNumber && data.policyNumber.length > 100)
+    ) {
+      throw new HttpsError("invalid-argument", "Carrier or policy number is too long.");
     }
 
     const tokenDoc = await db.collection("intakeTokens").doc(data.token).get();
@@ -443,15 +525,9 @@ export const submitBorrowerIntake = onCall(
     let cardContentType = "image/jpeg";
     let ext = "jpg";
     if (data.insuranceCardBase64) {
-      if (data.insuranceCardBase64.startsWith("/9j/")) {
-        cardContentType = "image/jpeg"; ext = "jpg";
-      } else if (data.insuranceCardBase64.startsWith("iVBOR")) {
-        cardContentType = "image/png"; ext = "png";
-      } else if (data.insuranceCardBase64.startsWith("JVBER")) {
-        cardContentType = "application/pdf"; ext = "pdf";
-      } else if (data.insuranceCardBase64.startsWith("R0lGO")) {
-        cardContentType = "image/gif"; ext = "gif";
-      }
+      const detected = validateInsuranceCardUpload(data.insuranceCardBase64);
+      cardContentType = detected.contentType;
+      ext = detected.ext;
     }
 
     // Handle insurance card photo upload
@@ -465,13 +541,18 @@ export const submitBorrowerIntake = onCall(
         metadata: { contentType: cardContentType },
       });
 
-      // Generate a signed URL valid for 1 year
+      // Persist the storage path so the URL can be regenerated on demand.
+      // Signed URL is short-lived (7 days) to limit exposure if the URL leaks.
+      policyUpdate.insuranceCardPath = filePath;
       const [signedUrl] = await file.getSignedUrl({
         action: "read",
-        expires: Date.now() + 365 * 24 * 60 * 60 * 1000,
+        expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
       });
 
       policyUpdate.insuranceCardUrl = signedUrl;
+      policyUpdate.insuranceCardUrlExpiresAt = Timestamp.fromMillis(
+        Date.now() + 7 * 24 * 60 * 60 * 1000
+      );
     }
 
     // ─── OCR extraction from uploaded card ─────────────────
@@ -709,10 +790,9 @@ export const dealerSubmitInsurance = onCall(
     let cardContentType = "image/jpeg";
     let ext = "jpg";
     if (data.insuranceCardBase64) {
-      if (data.insuranceCardBase64.startsWith("/9j/")) { cardContentType = "image/jpeg"; ext = "jpg"; }
-      else if (data.insuranceCardBase64.startsWith("iVBOR")) { cardContentType = "image/png"; ext = "png"; }
-      else if (data.insuranceCardBase64.startsWith("JVBER")) { cardContentType = "application/pdf"; ext = "pdf"; }
-      else if (data.insuranceCardBase64.startsWith("R0lGO")) { cardContentType = "image/gif"; ext = "gif"; }
+      const detected = validateInsuranceCardUpload(data.insuranceCardBase64);
+      cardContentType = detected.contentType;
+      ext = detected.ext;
     }
 
     // Upload card
@@ -722,8 +802,16 @@ export const dealerSubmitInsurance = onCall(
       const file = bucket.file(filePath);
       const imageBuffer = Buffer.from(data.insuranceCardBase64, "base64");
       await file.save(imageBuffer, { metadata: { contentType: cardContentType } });
-      const [signedUrl] = await file.getSignedUrl({ action: "read", expires: Date.now() + 365 * 24 * 60 * 60 * 1000 });
+      // Short-lived (7 day) signed URL; storage path persisted for re-signing.
+      policyUpdate.insuranceCardPath = filePath;
+      const [signedUrl] = await file.getSignedUrl({
+        action: "read",
+        expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      });
       policyUpdate.insuranceCardUrl = signedUrl;
+      policyUpdate.insuranceCardUrlExpiresAt = Timestamp.fromMillis(
+        Date.now() + 7 * 24 * 60 * 60 * 1000
+      );
     }
 
     // OCR extraction

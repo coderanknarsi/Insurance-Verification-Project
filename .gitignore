@@ -34,6 +34,17 @@ frontend/.env.*
 
 # Credentials / secrets
 _cred_temp.json
+_store_creds.js
+
+# Captured API / debug artifacts (do not commit — may contain creds/PII)
+captured-*.json
+deploy-output.txt
+homepage.html
+engine/captured-*.json
+engine/tsc-output.txt
+functions/build-output.txt
+functions/lib/
+**/test-output.txt
 
 # IDE
 .idea/
@@ -44,3 +55,4 @@ _cred_temp.json
 # OS
 .DS_Store
 Thumbs.db
+.vercel

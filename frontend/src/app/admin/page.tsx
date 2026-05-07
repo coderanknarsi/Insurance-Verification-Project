@@ -813,10 +813,22 @@ function RevenueTab({ data }: { data: AdminDashboardData }) {
 
 const SUPPORTED_CARRIERS = [
   { id: "progressive", name: "Progressive" },
-  { id: "statefarm", name: "State Farm" },
+  { id: "state_farm", name: "State Farm" },
   { id: "allstate", name: "Allstate" },
   { id: "geico", name: "GEICO" },
+  { id: "national_general", name: "National General" },
   { id: "nationwide", name: "Nationwide" },
+  { id: "farmers", name: "Farmers (Coming Soon)" },
+  { id: "usaa", name: "USAA (Coming Soon)" },
+  { id: "liberty_mutual", name: "Liberty Mutual (Coming Soon)" },
+  { id: "american_family", name: "American Family (Coming Soon)" },
+  { id: "travelers", name: "Travelers (Coming Soon)" },
+  { id: "auto_owners", name: "Auto-Owners (Coming Soon)" },
+  { id: "erie", name: "Erie Insurance (Coming Soon)" },
+  { id: "mercury", name: "Mercury Insurance (Coming Soon)" },
+  { id: "hartford", name: "The Hartford (Coming Soon)" },
+  { id: "safeco", name: "Safeco (Coming Soon)" },
+  { id: "kemper", name: "Kemper (Coming Soon)" },
 ];
 
 function CarriersTab() {

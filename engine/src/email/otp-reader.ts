@@ -10,6 +10,7 @@ const OTP_SENDERS: Record<string, string> = {
   progressive: "support_prove@otp.progressive.com",
   state_farm: "no-reply@c1.statefarm",
   allstate: "allstate@service01.email-allstate.com",
+  nationwide: "noreply@nationwide.com",
 };
 
 /**

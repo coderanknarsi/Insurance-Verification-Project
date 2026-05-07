@@ -13,6 +13,7 @@ import {
   FileText,
   Upload,
   ArrowLeft,
+  FlaskConical,
 } from "lucide-react";
 import { callIngestDealData, callRequestBorrowerIntake, callDealerSubmitInsurance } from "@/lib/api";
 import type { IngestDealResult, IntakeRequestResult, DealerSubmitInsuranceResult } from "@/lib/api";
@@ -22,6 +23,10 @@ interface AddBorrowerDialogProps {
   open: boolean;
   onClose: () => void;
   onComplete: () => void;
+  /** Logged-in dealer's email — used for the "test myself" autofill button. */
+  currentUserEmail?: string | null;
+  /** Logged-in dealer's display name — used for the "test myself" autofill button. */
+  currentUserDisplayName?: string | null;
 }
 
 interface VinDecodeResult {
@@ -54,6 +59,8 @@ export function AddBorrowerDialog({
   open,
   onClose,
   onComplete,
+  currentUserEmail,
+  currentUserDisplayName,
 }: AddBorrowerDialogProps) {
   const [step, setStep] = useState<Step>("form");
 
@@ -83,6 +90,9 @@ export function AddBorrowerDialog({
   const [insCardBase64, setInsCardBase64] = useState<string | null>(null);
   const [insCardName, setInsCardName] = useState<string | null>(null);
 
+  // Marks this borrower as a self-test by the dealer.
+  const [testMode, setTestMode] = useState(false);
+
   const reset = () => {
     setStep("form");
     setFirstName("");
@@ -105,6 +115,7 @@ export function AddBorrowerDialog({
     setInsPolicyNum("");
     setInsCardBase64(null);
     setInsCardName(null);
+    setTestMode(false);
   };
 
   const handleClose = () => {
@@ -136,6 +147,26 @@ export function AddBorrowerDialog({
 
   const canSubmit =
     firstName.trim() && lastName.trim() && (email.trim() || phone.trim()) && vin.length === 17;
+
+  /**
+   * Pre-fills the form with the logged-in dealer's name + email and a known-good
+   * sample VIN so they can walk through the full intake flow against themselves.
+   * They still need to enter their own cell phone for the SMS to arrive.
+   */
+  const fillWithMyInfo = () => {
+    const name = (currentUserDisplayName ?? "").trim();
+    const [first, ...rest] = name.split(" ");
+    if (first) setFirstName(first);
+    else setFirstName("Test");
+    if (rest.length > 0) setLastName(rest.join(" "));
+    else setLastName("Borrower");
+    if (currentUserEmail) setEmail(currentUserEmail);
+    // Honda Accord — decodes cleanly via NHTSA.
+    handleVinChange("1HGCM82633A004352");
+    setLoanNumber("TEST-" + Math.floor(Math.random() * 9000 + 1000));
+    setSmsConsent(true);
+    setTestMode(true);
+  };
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -273,6 +304,45 @@ export function AddBorrowerDialog({
                 </div>
               )}
 
+              {/* Test-myself shortcut — demo org only — pre-fills with dealer's own info */}
+              {!testMode && organizationId === "demo-org" && (currentUserEmail || currentUserDisplayName) && (
+                <button
+                  type="button"
+                  onClick={fillWithMyInfo}
+                  disabled={step === "saving"}
+                  className="w-full flex items-center justify-between px-4 py-2.5 bg-accent/5 hover:bg-accent/10 border border-accent/30 rounded-xl text-left transition-colors disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="w-4 h-4 text-accent" />
+                    <span className="text-xs font-medium text-offwhite">
+                      Use myself as a test borrower
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-carbon-light">
+                    Walks you through the full intake flow
+                  </span>
+                </button>
+              )}
+
+              {testMode && (
+                <div className="px-4 py-3 bg-accent/5 border border-accent/30 rounded-xl">
+                  <div className="flex items-start gap-2">
+                    <FlaskConical className="w-4 h-4 text-accent mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-offwhite">
+                        Test mode — using your own info
+                      </p>
+                      <p className="text-[11px] text-carbon-light leading-relaxed">
+                        Enter your real cell phone below, then submit and click
+                        Send Request. You&apos;ll get the same SMS a real borrower
+                        would, can upload an insurance card, and watch the status
+                        update live on this dashboard.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Borrower Info */}
               <div>
                 <p className="text-xs font-medium text-carbon-light uppercase tracking-wider mb-3">
@@ -323,6 +393,9 @@ export function AddBorrowerDialog({
                   <div>
                     <label className="text-xs text-carbon-light mb-1 block">
                       Phone <span className="text-red-400">*</span>
+                      {testMode && !phone.trim() && (
+                        <span className="ml-2 text-[10px] text-accent">← enter your cell to receive the test SMS</span>
+                      )}
                     </label>
                     <input
                       type="tel"
@@ -330,7 +403,9 @@ export function AddBorrowerDialog({
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="555-123-4567"
                       disabled={step === "saving"}
-                      className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm text-offwhite placeholder:text-carbon-light/50 focus:outline-none focus:border-accent disabled:opacity-50"
+                      className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-offwhite placeholder:text-carbon-light/50 focus:outline-none focus:border-accent disabled:opacity-50 ${
+                        testMode && !phone.trim() ? "border-accent/60" : "border-border-subtle"
+                      }`}
                     />
                   </div>
                 </div>

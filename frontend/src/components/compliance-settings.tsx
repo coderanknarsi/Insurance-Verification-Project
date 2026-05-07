@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Save, RotateCcw } from "lucide-react";
+import { Settings, Save, RotateCcw, Bell, AlertOctagon, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   callGetComplianceRules,
@@ -407,29 +407,150 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
         </div>
       </div>
 
-      {/* Automation */}
+      {/* Notifications */}
       <div className="bg-card-bg border border-border-subtle rounded-xl p-5">
-        <h3 className="text-xs font-semibold text-offwhite uppercase tracking-wider mb-1">
-          Automated Reminders
-        </h3>
+        <div className="flex items-center gap-2 mb-1">
+          <Bell className="w-4 h-4 text-accent" />
+          <h3 className="text-xs font-semibold text-offwhite uppercase tracking-wider">
+            Borrower Notifications
+          </h3>
+        </div>
+        <p className="text-xs text-carbon-light mb-4">
+          Auto Lien Tracker automatically sends email and SMS notices to your borrowers — that&apos;s the
+          core of how we protect your portfolio. Tune the cadence below.
+        </p>
+
         <div className="divide-y divide-border-subtle">
-          <Toggle
-            label="Auto-send Expiry Reminders"
-            description="Automatically notify borrowers via email and SMS when their policy is about to expire, giving them time to renew before a lapse occurs"
-            checked={rules.autoSendReminder}
-            onChange={(v) => update({ autoSendReminder: v })}
-            onLabel="Enabled"
-            offLabel="Disabled"
+          <NumberInput
+            label="Expiry Reminder"
+            description="Send a friendly renewal reminder this many days before a policy expires."
+            value={rules.reminderDaysBeforeExpiry}
+            onChange={(v) => update({ reminderDaysBeforeExpiry: v ?? 10 })}
+            suffix="days before"
           />
-          {rules.autoSendReminder && (
-            <NumberInput
-              label="Reminder Lead Time"
-              description="Send reminder this many days before expiry"
-              value={rules.reminderDaysBeforeExpiry}
-              onChange={(v) => update({ reminderDaysBeforeExpiry: v ?? 10 })}
-              suffix="days"
+        </div>
+
+        {/* Lapse cadence */}
+        <div className="mt-4 pt-4 border-t border-border-subtle">
+          <p className="text-sm font-medium text-offwhite mb-1">Lapse escalation</p>
+          <p className="text-xs text-carbon-light mb-3">
+            Days after a lapse is detected to send each escalating notice.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            {(["firstNoticeDays", "secondNoticeDays", "finalNoticeDays"] as const).map((k, i) => {
+              const labels = ["1st notice", "2nd notice", "Final notice"];
+              const defaults = [1, 10, 20];
+              const current = rules.lapseEscalation?.[k] ?? defaults[i];
+              return (
+                <div key={k}>
+                  <label className="text-[11px] text-carbon-light block mb-1">{labels[i]}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={current}
+                    onChange={(e) => {
+                      const n = Number(e.target.value) || defaults[i];
+                      const base = rules.lapseEscalation ?? { firstNoticeDays: 1, secondNoticeDays: 10, finalNoticeDays: 20 };
+                      update({ lapseEscalation: { ...base, [k]: n } });
+                    }}
+                    className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-1.5 text-sm text-offwhite focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Coverage cadence */}
+        <div className="mt-4 pt-4 border-t border-border-subtle">
+          <p className="text-sm font-medium text-offwhite mb-1">Coverage gap escalation</p>
+          <p className="text-xs text-carbon-light mb-3">
+            Days after detecting a coverage issue (missing comp/collision, deductible too high, missing
+            lienholder) to send each notice.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            {(["firstNoticeDays", "secondNoticeDays", "finalNoticeDays"] as const).map((k, i) => {
+              const labels = ["1st notice", "2nd notice", "Final notice"];
+              const defaults = [1, 14, 30];
+              const current = rules.coverageEscalation?.[k] ?? defaults[i];
+              return (
+                <div key={k}>
+                  <label className="text-[11px] text-carbon-light block mb-1">{labels[i]}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={90}
+                    value={current}
+                    onChange={(e) => {
+                      const n = Number(e.target.value) || defaults[i];
+                      const base = rules.coverageEscalation ?? { firstNoticeDays: 1, secondNoticeDays: 14, finalNoticeDays: 30 };
+                      update({ coverageEscalation: { ...base, [k]: n } });
+                    }}
+                    className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-1.5 text-sm text-offwhite focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Emergency pause */}
+      <div className={`rounded-xl p-5 border ${
+        rules.notificationsPaused
+          ? "bg-red-500/5 border-red-500/30"
+          : "bg-card-bg border-border-subtle"
+      }`}>
+        <div className="flex items-start gap-3 mb-3">
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+            rules.notificationsPaused ? "bg-red-500/15" : "bg-yellow-500/10"
+          }`}>
+            <AlertOctagon className={`w-4 h-4 ${rules.notificationsPaused ? "text-red-400" : "text-yellow-400"}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-offwhite">Emergency: pause all sends</h3>
+            <p className="text-xs text-carbon-light mt-1 leading-relaxed">
+              Stops every outbound borrower notification (email + SMS) across this org until you re-enable.
+              Use this only for incidents — for example, a data issue causing false-positive lapses, or
+              while investigating a complaint. Your borrowers won&apos;t receive cure confirmations either,
+              so don&apos;t leave it on.
+            </p>
+          </div>
+        </div>
+
+        {rules.notificationsPaused && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+            <p className="text-xs font-medium text-red-400 flex items-center gap-2">
+              <Pause className="w-3 h-3" /> All borrower notifications are currently paused.
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] text-carbon-light block mb-1">Reason (recorded in audit log)</label>
+            <input
+              type="text"
+              value={rules.notificationsPausedReason ?? ""}
+              onChange={(e) => update({ notificationsPausedReason: e.target.value })}
+              placeholder="e.g. Investigating false lapse detections — 2026-04-27"
+              maxLength={500}
+              className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-1.5 text-sm text-offwhite placeholder:text-carbon focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
             />
-          )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => update({ notificationsPaused: !rules.notificationsPaused })}
+            className={`w-full px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+              rules.notificationsPaused
+                ? "bg-green-500/15 text-green-400 hover:bg-green-500/25 border border-green-500/30"
+                : "bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30"
+            }`}
+          >
+            {rules.notificationsPaused ? "Resume notifications" : "Pause all notifications"}
+          </button>
         </div>
       </div>
 

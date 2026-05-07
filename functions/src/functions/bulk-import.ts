@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 import { collections } from "../config/firestore";
 import { requireAuth, requireRole, requireOrg } from "../middleware/auth";
 import { logAudit } from "../services/audit";
@@ -7,6 +8,7 @@ import { UserRole } from "../types/user";
 import { PolicyStatus, DashboardStatus, ComplianceIssue, Policy } from "../types/policy";
 import { AuditAction, AuditEntityType } from "../types/audit";
 import { Borrower, SmsConsentStatus } from "../types/borrower";
+import { kickoffOrgIntake } from "./onboarding-kickoff";
 
 interface CsvRow {
   firstName: string;
@@ -302,6 +304,21 @@ export const bulkImportDeals = onCall(
 
     const totalWarnings = results.reduce((n, r) => n + (r.warnings?.length ?? 0), 0);
 
+    // Automatically kick off intake requests for borrowers who still need
+    // insurance info on file. kickoffOrgIntake() handles quiet hours,
+    // 24h idempotency, and SMS/email fallback. We await it so the dealer
+    // sees confirmation in the import result, but failures here don't
+    // fail the import itself.
+    let intakeKickoff: Awaited<ReturnType<typeof kickoffOrgIntake>> | null = null;
+    try {
+      intakeKickoff = await kickoffOrgIntake(data.organizationId, /*forceSend*/ false);
+    } catch (err) {
+      logger.warn("[bulk-import] kickoffOrgIntake failed", {
+        organizationId: data.organizationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     return {
       total: data.rows.length,
       created: results.filter((r) => r.status === "created").length,
@@ -309,6 +326,7 @@ export const bulkImportDeals = onCall(
       errors: results.filter((r) => r.status === "error").length,
       warnings: totalWarnings,
       results,
+      intakeKickoff,
     };
   }
 );

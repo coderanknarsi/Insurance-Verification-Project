@@ -5,7 +5,11 @@ import { UserRole } from "../types/user";
 
 export const getVerifications = onCall(async (request) => {
   const { user } = await requireAuth(request);
-  const { organizationId } = request.data as { organizationId: string };
+  const { organizationId, borrowerId, limit } = request.data as {
+    organizationId: string;
+    borrowerId?: string;
+    limit?: number;
+  };
 
   if (!organizationId) {
     throw new HttpsError("invalid-argument", "organizationId is required.");
@@ -14,11 +18,16 @@ export const getVerifications = onCall(async (request) => {
   requireRole(user, UserRole.ADMIN, UserRole.MANAGER);
   requireOrg(user, organizationId);
 
-  // Fetch notifications for this org, ordered by creation date
-  const notifSnap = await collections.notifications
-    .where("organizationId", "==", organizationId)
+  // Fetch notifications for this org (optionally scoped to one borrower),
+  // ordered by creation date desc.
+  let query = collections.notifications
+    .where("organizationId", "==", organizationId);
+  if (borrowerId) {
+    query = query.where("borrowerId", "==", borrowerId);
+  }
+  const notifSnap = await query
     .orderBy("createdAt", "desc")
-    .limit(100)
+    .limit(Math.min(limit ?? 100, 200))
     .get();
 
   if (notifSnap.empty) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, Check, ChevronRight, Loader2, Sparkles, Zap, Upload, Download, Users, CheckCircle } from "lucide-react";
+import { Shield, Check, ChevronRight, Loader2, Sparkles, Zap, Upload, Download, Users, CheckCircle, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,10 +107,6 @@ export function OnboardingWizard({
 
   const [lienholderName, setLienholderName] = useState(initialLienholderName);
   const [requireLienholder, setRequireLienholder] = useState(initialRules.requireLienholder);
-  const [autoSendReminder, setAutoSendReminder] = useState(initialRules.autoSendReminder);
-  const [reminderDays, setReminderDays] = useState<string>(
-    String(initialRules.reminderDaysBeforeExpiry ?? 10)
-  );
 
   const saveProfile = async (opts: { completed: boolean }) => {
     await callUpdateOrganizationProfile({
@@ -136,8 +132,8 @@ export function OnboardingWizard({
       maxCollisionDeductible: Number.isFinite(parsedCollision as number)
         ? (parsedCollision as number)
         : undefined,
-      autoSendReminder,
-      reminderDaysBeforeExpiry: Number(reminderDays) || 10,
+      autoSendReminder: true,
+      reminderDaysBeforeExpiry: initialRules.reminderDaysBeforeExpiry ?? 10,
     };
 
     await callUpdateComplianceRules({ organizationId, rules });
@@ -176,6 +172,10 @@ export function OnboardingWizard({
     }
 
     if (step === 3) {
+      if (requireLienholder && !lienholderName.trim()) {
+        setError("Lienholder name is required when \"Require lienholder on policy\" is enabled. Add the company name as it should appear on policies, or turn the requirement off.");
+        return;
+      }
       setSaving(true);
       try {
         await Promise.all([saveRules(), saveProfile({ completed: false })]);
@@ -371,6 +371,7 @@ export function OnboardingWizard({
               <div className="space-y-2">
                 <Label htmlFor="lienholder" className="text-sm text-carbon-light">
                   Lienholder name (as shown on policies)
+                  {requireLienholder && <span className="text-red-400 ml-1">*</span>}
                 </Label>
                 <Input
                   id="lienholder"
@@ -378,8 +379,17 @@ export function OnboardingWizard({
                   value={lienholderName}
                   onChange={(e) => setLienholderName(e.target.value)}
                   placeholder={name || "Acme Auto Finance"}
-                  className="bg-surface border-border-subtle text-offwhite placeholder:text-carbon focus:border-accent focus:ring-accent/30"
+                  className={`bg-surface text-offwhite placeholder:text-carbon focus:ring-accent/30 ${
+                    requireLienholder && !lienholderName.trim()
+                      ? "border-red-500/40 focus:border-red-400"
+                      : "border-border-subtle focus:border-accent"
+                  }`}
                 />
+                {requireLienholder && !lienholderName.trim() && (
+                  <p className="text-[11px] text-red-400 mt-1">
+                    Required — we use this exact name to verify policies list you as the lienholder.
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-surface border border-border-subtle">
@@ -404,46 +414,36 @@ export function OnboardingWizard({
                 </button>
               </div>
 
-              <div className="p-4 rounded-lg bg-surface border border-border-subtle space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="mr-4">
-                    <p className="text-sm text-offwhite font-medium">Auto-send expiry reminders</p>
-                    <p className="text-xs text-carbon-light mt-0.5">
-                      Automatically notify borrowers via <strong className="text-carbon-light">email and SMS</strong> when
-                      their policy is about to expire, giving them time to renew before a lapse occurs.
+              <div className="p-4 rounded-lg bg-accent/5 border border-accent/20 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
+                    <Bell className="w-4 h-4 text-accent" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-offwhite font-medium">Automated borrower notifications</p>
+                    <p className="text-xs text-carbon-light mt-1 leading-relaxed">
+                      We&apos;ll automatically email and text your borrowers on your behalf:
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setAutoSendReminder(!autoSendReminder)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                      autoSendReminder ? "bg-accent" : "bg-border-subtle"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
-                        autoSendReminder ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
                 </div>
-
-                {autoSendReminder && (
-                  <div className="space-y-2 pt-1 border-t border-border-subtle">
-                    <Label htmlFor="reminderDays" className="text-sm text-carbon-light">
-                      Days before expiry to send reminder
-                    </Label>
-                    <Input
-                      id="reminderDays"
-                      type="number"
-                      min="1"
-                      max="60"
-                      value={reminderDays}
-                      onChange={(e) => setReminderDays(e.target.value)}
-                      className="w-24 bg-surface border-border-subtle text-offwhite focus:border-accent focus:ring-accent/30"
-                    />
-                  </div>
-                )}
+                <ul className="text-xs text-carbon-light space-y-1.5 pl-11">
+                  <li className="flex items-start gap-2">
+                    <span className="text-accent mt-0.5">•</span>
+                    <span><strong className="text-offwhite">10 days before</strong> a policy expires — friendly renewal reminder</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-accent mt-0.5">•</span>
+                    <span><strong className="text-offwhite">Day 1, 10, and 20</strong> after a lapse — escalating notices ending in a final force-place / repossession warning</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-accent mt-0.5">•</span>
+                    <span><strong className="text-offwhite">Coverage gap reminders</strong> when policies are missing your lienholder, comp, or collision</span>
+                  </li>
+                </ul>
+                <p className="text-[11px] text-carbon pl-11 pt-1 border-t border-border-subtle">
+                  This is the core of how Auto Lien Tracker protects your portfolio. You can fine-tune timing, copy,
+                  and quiet hours in <span className="text-accent">Settings &rarr; Notifications</span> after onboarding.
+                </p>
               </div>
             </div>
           )}
@@ -482,8 +482,12 @@ export function OnboardingWizard({
               ) : (
                 <>
                   <div className="rounded-lg bg-surface border border-border-subtle p-4">
-                    <p className="text-xs font-medium text-offwhite mb-2">What you&apos;ll need in your CSV</p>
+                    <p className="text-xs font-medium text-offwhite mb-2">What we accept</p>
                     <ul className="space-y-1 text-xs text-carbon-light">
+                      <li className="flex items-start gap-2">
+                        <span className="text-accent">•</span>
+                        <span><strong className="text-offwhite">File types:</strong> CSV, PDF, or image &mdash; AI reads PDFs from Frazer and other DMS exports</span>
+                      </li>
                       <li className="flex items-start gap-2">
                         <span className="text-accent">•</span>
                         <span><strong className="text-offwhite">Required:</strong> Name, VIN, and email or phone</span>
@@ -574,9 +578,9 @@ export function OnboardingWizard({
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-xs text-carbon-light">Expiry reminders</span>
+                  <span className="text-xs text-carbon-light">Borrower notifications</span>
                   <span className="text-sm text-offwhite font-medium text-right">
-                    {autoSendReminder ? `${reminderDays} days before (email + SMS)` : "Off"}
+                    On (email + SMS, automated)
                   </span>
                 </div>
               </div>

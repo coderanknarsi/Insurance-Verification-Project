@@ -28,7 +28,7 @@ const capabilities = [
   {
     icon: ShieldCheck,
     title: 'Direct Carrier Checks',
-    description: 'Verify coverage with Progressive, State Farm, Allstate, and National General.',
+    description: 'Verify coverage with Progressive, State Farm, Allstate, GEICO, Nationwide, and National General.',
   },
   {
     icon: Bell,

@@ -20,6 +20,7 @@ import { Shield, Play } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { DashboardSummary } from "@/components/dashboard-summary";
 import { DashboardWidgets } from "@/components/dashboard-widgets";
+import { OnboardingKpis } from "@/components/onboarding-kpis";
 import { BorrowerTable, type StatusFilter } from "@/components/borrower-table";
 import { BorrowerDetailPanel } from "@/components/borrower-detail-panel";
 import { ComplianceSettings } from "@/components/compliance-settings";
@@ -453,6 +454,10 @@ export default function Home() {
                   setBorrowerFilter(f);
                   borrowerTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                 }}
+              />
+              <OnboardingKpis
+                organizationId={organizationId}
+                refreshKey={refreshKey}
               />
               <DashboardWidgets borrowers={allBorrowers} />
               <div ref={borrowerTableRef}>

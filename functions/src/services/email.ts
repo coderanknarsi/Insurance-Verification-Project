@@ -370,8 +370,9 @@ function intakeRequestEmailHtml(
       <p style="margin:0;font-size:12px;color:#6b7a99;text-transform:uppercase;letter-spacing:0.5px;">Vehicle</p>
       <p style="margin:4px 0 0;font-size:15px;color:#ffffff;font-weight:500;">${vehicleLabel}</p>
     </div>
-    <p style="margin:0 0 20px;font-size:14px;color:#8b9dc3;line-height:1.6;">
-      Click the button below to securely submit your insurance details. It only takes a minute.
+    <p style="margin:0 0 16px;font-size:14px;color:#8b9dc3;line-height:1.6;">
+      Click the button below to securely submit your insurance details. It only takes a minute &mdash;
+      just enter your <strong style="color:#ffffff;">carrier name and policy number</strong>, or upload a photo of your insurance card.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       <tr><td style="background:#3b82f6;border-radius:10px;">
@@ -381,6 +382,9 @@ function intakeRequestEmailHtml(
         </a>
       </td></tr>
     </table>
+    <p style="margin:0 0 12px;font-size:13px;color:#8b9dc3;line-height:1.6;">
+      <strong style="color:#ffffff;">Need help?</strong> Reply to this email or call ${dealershipName} and we&rsquo;ll walk you through it.
+    </p>
     <p style="margin:0;font-size:12px;color:#6b7a99;line-height:1.5;">
       This link expires in 7 days. If the button doesn't work, copy and paste this URL into your browser:<br/>
       <a href="${intakeUrl}" style="color:#3b82f6;word-break:break-all;">${intakeUrl}</a>

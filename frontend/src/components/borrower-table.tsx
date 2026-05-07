@@ -17,9 +17,23 @@ import type { BorrowerWithVehicles } from "@/lib/api";
 import { Search, Send, Upload, UserPlus, Loader2, X } from "lucide-react";
 import { ImportDialog } from "@/components/import-dialog";
 import { AddBorrowerDialog } from "@/components/add-borrower-dialog";
-import { callRequestBorrowerIntake } from "@/lib/api";
+import { callRequestBorrowerIntake, callGetComplianceRules } from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+
+/** Mirror of the server-side TCPA quiet-hours check. 8 AM – 9 PM in the given IANA timezone. */
+function isWithinSendingHours(timezone?: string): boolean {
+  const tz = timezone || "America/Chicago";
+  try {
+    const hour = parseInt(
+      new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hour12: false }).format(new Date()),
+      10,
+    );
+    return hour >= 8 && hour < 21;
+  } catch {
+    return true; // fail-open
+  }
+}
 
 export type StatusFilter = "ALL" | "GREEN" | "YELLOW" | "RED" | "ACTION_REQUIRED" | "AWAITING_INFO";
 
@@ -223,12 +237,102 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
     }
   };
 
+  const [orgTimezone, setOrgTimezone] = useState<string>("America/Chicago");
+  const [withinSendingHours, setWithinSendingHours] = useState<boolean>(() => isWithinSendingHours("America/Chicago"));
+
+  // Fetch org timezone once and recheck every minute so the button state stays current.
+  useEffect(() => {
+    if (!organizationId) return;
+    callGetComplianceRules({ organizationId })
+      .then((res) => {
+        const tz = res.data.timezone || "America/Chicago";
+        setOrgTimezone(tz);
+        setWithinSendingHours(isWithinSendingHours(tz));
+      })
+      .catch(() => { /* keep defaults */ });
+  }, [organizationId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWithinSendingHours(isWithinSendingHours(orgTimezone));
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [orgTimezone]);
+
   const [bulkVerifying, setBulkVerifying] = useState(false);
-  const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; errored: number; lastError: string } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; quietHours: number; errored: number; lastError: string } | null>(null);
 
   const handleBulkVerify = async () => {
-    // Verification is now handled automatically by the Data Feed Engine
-    // No manual bulk verify needed
+    if (selectedIds.size === 0 || bulkVerifying) return;
+
+    setBulkVerifying(true);
+    setBulkResult(null);
+
+    const selectedBorrowers = borrowers.filter((borrower) => selectedIds.has(borrower.id));
+    let sent = 0;
+    let skipped = 0;
+    let quietHours = 0;
+    let errored = 0;
+    let lastError = "";
+
+    for (const borrower of selectedBorrowers) {
+      const targetVehicle = borrower.vehicles.find((vehicle) => vehicle.policy?.awaitingCredentials === true);
+      const canReachBorrower = Boolean(
+        borrower.email || (borrower.phone && borrower.smsConsentStatus === "OPTED_IN")
+      );
+
+      if (!targetVehicle?.policy || !canReachBorrower) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        const res = await callRequestBorrowerIntake({
+          organizationId: borrower.organizationId,
+          borrowerId: borrower.id,
+          vehicleId: targetVehicle.id,
+          policyId: targetVehicle.policy.id,
+        });
+
+        if (res.data.delivered) {
+          sent++;
+        } else {
+          errored++;
+          lastError = res.data.deliveryError ?? "Delivery failed";
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to send intake request";
+        if (message.toLowerCase().includes("quiet hours")) {
+          quietHours++;
+          lastError = message;
+        } else {
+          errored++;
+          lastError = message;
+        }
+      }
+    }
+
+    const result = { sent, skipped, quietHours, errored, lastError };
+    setBulkResult(result);
+
+    if (sent > 0 && errored === 0 && quietHours === 0) {
+      toast.success(`Sent ${sent} intake request${sent !== 1 ? "s" : ""}${skipped > 0 ? ` · ${skipped} skipped` : ""}`);
+    } else if (sent > 0 && quietHours > 0 && errored === 0) {
+      toast.warning(`Sent ${sent} intake request${sent !== 1 ? "s" : ""}; ${quietHours} phone-only borrower${quietHours !== 1 ? "s" : ""} paused until 8 AM`);
+    } else if (sent > 0) {
+      toast.warning(`Sent ${sent} intake request${sent !== 1 ? "s" : ""}; ${errored} failed`);
+    } else if (quietHours > 0 && errored === 0) {
+      toast.warning(lastError || "SMS is paused until 8 AM due to quiet hours.");
+    } else if (errored > 0) {
+      toast.error(lastError || "Bulk verify failed");
+    } else {
+      toast.warning("No selected borrowers have an eligible verification request to send.");
+    }
+
+    setBulkVerifying(false);
+    if (sent > 0) {
+      await fetchBorrowers();
+    }
   };
 
   return (
@@ -290,7 +394,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
             className="bg-surface border border-border-subtle text-carbon-light hover:text-offwhite hover:bg-white/[0.04] text-xs h-7 px-3"
           >
             <Upload className="w-3 h-3 mr-1.5" />
-            Import CSV
+            Import Customers
           </Button>
           {/* Bulk actions */}
           {selectedIds.size > 0 && (
@@ -298,19 +402,26 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
               <span className="text-xs text-carbon-light">
                 {selectedIds.size} selected
               </span>
-              <Button
-                size="sm"
-                onClick={handleBulkVerify}
-                disabled={bulkVerifying}
-                className="bg-accent hover:bg-accent-hover text-white text-xs h-7 px-3"
-              >
-                {bulkVerifying ? (
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                ) : (
-                  <Send className="w-3 h-3 mr-1" />
+              <div className="relative group">
+                <Button
+                  size="sm"
+                  onClick={handleBulkVerify}
+                  disabled={bulkVerifying || !withinSendingHours}
+                  className="bg-accent hover:bg-accent-hover text-white text-xs h-7 px-3 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {bulkVerifying ? (
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  ) : (
+                    <Send className="w-3 h-3 mr-1" />
+                  )}
+                  {bulkVerifying ? "Sending..." : "Bulk Verify"}
+                </Button>
+                {!withinSendingHours && (
+                  <div className="absolute right-0 top-full mt-1.5 z-50 w-56 rounded-lg bg-surface border border-border-subtle px-3 py-2 text-xs text-carbon-light shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                    SMS intake requests are only sent <span className="text-offwhite font-medium">8 AM – 9 PM</span> ({orgTimezone}) to comply with TCPA quiet-hours rules.
+                  </div>
                 )}
-                {bulkVerifying ? "Sending..." : "Bulk Verify"}
-              </Button>
+              </div>
             </div>
           )}
           <div className="flex gap-1 bg-surface rounded-lg p-1">
@@ -345,17 +456,25 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
         </div>
       </div>
 
+      {/* Quiet-hours banner — shown when outside sending window */}
+      {!withinSendingHours && (
+        <div className="px-6 py-2 text-xs font-medium bg-yellow-500/10 text-yellow-400 flex items-center gap-2">
+          <span>SMS intake requests are paused outside 8 AM – 9 PM ({orgTimezone}) to comply with TCPA quiet-hours rules. Verification requests will be available again at 8 AM.</span>
+        </div>
+      )}
+
       {/* Bulk verify result banner */}
       {bulkResult && (
         <div className={`px-6 py-2 text-xs font-medium ${
-          bulkResult.skipped === 0 && bulkResult.errored === 0
+          bulkResult.skipped === 0 && bulkResult.quietHours === 0 && bulkResult.errored === 0
             ? "bg-green-500/10 text-green-400"
             : bulkResult.errored > 0
               ? "bg-red-500/10 text-red-400"
               : "bg-yellow-500/10 text-yellow-400"
         }`}>
-          Sent {bulkResult.sent} verification email{bulkResult.sent !== 1 ? "s" : ""}
-          {bulkResult.skipped > 0 && ` · ${bulkResult.skipped} skipped (missing email or vehicle)`}
+          Sent {bulkResult.sent} intake request{bulkResult.sent !== 1 ? "s" : ""}
+          {bulkResult.skipped > 0 && ` · ${bulkResult.skipped} skipped (missing contact, SMS consent, or eligible vehicle)`}
+          {bulkResult.quietHours > 0 && ` · ${bulkResult.quietHours} delayed by SMS quiet hours (until 8 AM)`}
           {bulkResult.errored > 0 && ` · ${bulkResult.errored} failed`}
           {bulkResult.lastError && ` — ${bulkResult.lastError}`}
         </div>
@@ -390,7 +509,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                   : `No ${filterTabs.find((t) => t.value === filter)?.label?.toLowerCase()} borrowers`}
               </p>
               {filter === "ALL" && (
-                <p className="text-xs text-carbon-light mt-1">Import a CSV to add your client base</p>
+                <p className="text-xs text-carbon-light mt-1">Import a CSV, PDF, or image to add your client base</p>
               )}
             </div>
             {filter === "ALL" && (
@@ -410,7 +529,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                   className="bg-transparent border-border-subtle text-carbon-light hover:text-offwhite"
                 >
                   <Upload className="w-3.5 h-3.5 mr-1.5" />
-                  Import CSV
+                  Import Customers
                 </Button>
               </div>
             )}
@@ -527,7 +646,13 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                                   ? "text-green-400"
                                   : "text-offwhite";
                             const label = CONTACT_TRIGGER_LABELS[lc.trigger] ?? lc.trigger;
-                            const channelTag = lc.channel === "SMS" ? "SMS" : lc.channel === "EMAIL" ? "Email" : lc.channel;
+                            const channelTag = lc.channel === "BOTH"
+                              ? "Email + SMS"
+                              : lc.channel === "SMS"
+                                ? "SMS"
+                                : lc.channel === "EMAIL"
+                                  ? "Email"
+                                  : lc.channel;
                             return (
                               <div className="max-w-[160px]">
                                 <p className={`text-xs font-medium truncate ${tone}`}>{label}</p>
@@ -579,10 +704,12 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         {policy?.awaitingCredentials ? (
+                          <div className="relative group">
                           <Button
                             size="sm"
+                            disabled={!withinSendingHours}
                             onClick={async () => {
-                              if (!vehicle) return;
+                              if (!vehicle || !withinSendingHours) return;
                               try {
                                 const res = await callRequestBorrowerIntake({
                                   organizationId: borrower.organizationId,
@@ -607,11 +734,17 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                                 toast.error(err instanceof Error ? err.message : "Failed to send intake request");
                               }
                             }}
-                            className="bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border-0 text-xs h-6 px-2"
+                            className="bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border-0 text-xs h-6 px-2 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             <Send className="w-3 h-3 mr-1" />
                             Request Info
                           </Button>
+                          {!withinSendingHours && (
+                            <div className="absolute right-0 top-full mt-1.5 z-50 w-52 rounded-lg bg-surface border border-border-subtle px-3 py-2 text-xs text-carbon-light shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                              Available <span className="text-offwhite font-medium">8 AM – 9 PM</span> ({orgTimezone})
+                            </div>
+                          )}
+                          </div>
                         ) : (
                           <span className="text-xs text-carbon-light">Auto-verified</span>
                         )}

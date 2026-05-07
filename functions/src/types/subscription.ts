@@ -18,28 +18,57 @@ export interface PlanConfig {
   name: string;
   priceMonthly: number;
   maxVehicles: number;
+  /**
+   * Stripe price ID. Resolved from environment variables at runtime so that
+   * test-mode and live-mode deployments can use the same code without
+   * baking IDs into source. Use `getStripePriceId(plan)` for the live value.
+   */
   stripePriceId: string;
 }
 
-// Stripe test-mode price IDs — replace with live IDs for production
+/**
+ * Resolve the Stripe price ID for a plan from environment variables.
+ * Required env vars (set via Firebase config / Secret Manager):
+ *   STRIPE_PRICE_STARTER, STRIPE_PRICE_GROWTH, STRIPE_PRICE_SCALE
+ * Enterprise has no self-serve price (custom contract).
+ */
+export function getStripePriceId(plan: SubscriptionPlan): string {
+  switch (plan) {
+    case SubscriptionPlan.STARTER:
+      return process.env.STRIPE_PRICE_STARTER ?? "";
+    case SubscriptionPlan.GROWTH:
+      return process.env.STRIPE_PRICE_GROWTH ?? "";
+    case SubscriptionPlan.SCALE:
+      return process.env.STRIPE_PRICE_SCALE ?? "";
+    case SubscriptionPlan.ENTERPRISE:
+      return "";
+  }
+}
+
 export const PLAN_CONFIG: Record<SubscriptionPlan, PlanConfig> = {
   [SubscriptionPlan.STARTER]: {
     name: "Starter",
     priceMonthly: 149,
     maxVehicles: 50,
-    stripePriceId: "price_1TAgpU2eLlJV4R72kqrPWpQR",
+    get stripePriceId() {
+      return getStripePriceId(SubscriptionPlan.STARTER);
+    },
   },
   [SubscriptionPlan.GROWTH]: {
     name: "Growth",
     priceMonthly: 349,
     maxVehicles: 150,
-    stripePriceId: "price_1TAgpd2eLlJV4R72wYPO3iAY",
+    get stripePriceId() {
+      return getStripePriceId(SubscriptionPlan.GROWTH);
+    },
   },
   [SubscriptionPlan.SCALE]: {
     name: "Scale",
     priceMonthly: 599,
     maxVehicles: 300,
-    stripePriceId: "price_1TAgpl2eLlJV4R728zeq4me8",
+    get stripePriceId() {
+      return getStripePriceId(SubscriptionPlan.SCALE);
+    },
   },
   [SubscriptionPlan.ENTERPRISE]: {
     name: "Enterprise",
@@ -61,9 +90,10 @@ export interface StripeSubscriptionData {
 }
 
 export function getPlanByPriceId(priceId: string): SubscriptionPlan | null {
-  for (const [plan, config] of Object.entries(PLAN_CONFIG)) {
-    if (config.stripePriceId === priceId) {
-      return plan as SubscriptionPlan;
+  if (!priceId) return null;
+  for (const plan of Object.values(SubscriptionPlan)) {
+    if (getStripePriceId(plan) === priceId) {
+      return plan;
     }
   }
   return null;

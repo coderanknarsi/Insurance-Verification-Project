@@ -1,8 +1,10 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 import { collections } from "../config/firestore";
 import { requireAuth, requireRole, requireOrg } from "../middleware/auth";
 import { logAudit } from "../services/audit";
+import { createIntakeTokenAndNotify } from "../services/intake-token";
 import { UserRole } from "../types/user";
 import { PolicyStatus, DashboardStatus, ComplianceIssue, Policy } from "../types/policy";
 import { AuditAction, AuditEntityType } from "../types/audit";
@@ -250,10 +252,61 @@ export const ingestDealData = onCall(async (request) => {
     updatedAt: now,
   } as FirebaseFirestore.UpdateData<unknown>);
 
+  // If the policy is awaiting insurance credentials, automatically fire an
+  // intake request (SMS + email) to the borrower. This removes a manual step
+  // for dealership staff and keeps onboarding moving. Failures are logged
+  // but never block the ingest call.
+  let intakeNotify: Awaited<ReturnType<typeof createIntakeTokenAndNotify>> | null = null;
+  const policyAwaitingCreds = !(data.insurance?.provider && data.insurance?.policyNumber);
+  const hasContact = !!(data.borrower.email || data.borrower.phone);
+  if (policyAwaitingCreds && hasContact) {
+    try {
+      const orgSnap = await collections.organizations.doc(data.organizationId).get();
+      const orgData = orgSnap.data() as
+        | {
+            name?: string;
+            settings?: { complianceRules?: { timezone?: string } };
+          }
+        | undefined;
+      const dealershipName = orgData?.name || "Your dealership";
+      const orgTimezone = orgData?.settings?.complianceRules?.timezone;
+
+      const vehicleLabel = [data.vehicle.year, data.vehicle.make, data.vehicle.model]
+        .filter(Boolean)
+        .join(" ") || `VIN ${data.vehicle.vin}`;
+
+      intakeNotify = await createIntakeTokenAndNotify({
+        organizationId: data.organizationId,
+        borrower: {
+          id: borrowerId,
+          firstName: data.borrower.firstName,
+          lastName: data.borrower.lastName,
+          email: data.borrower.email,
+          phone: data.borrower.phone,
+          smsConsentStatus: data.borrower.smsConsent
+            ? SmsConsentStatus.OPTED_IN
+            : undefined,
+        },
+        vehicleId,
+        vehicleLabel,
+        policyId,
+        dealershipName,
+        orgTimezone,
+      });
+    } catch (err) {
+      logger.warn("[ingest-deal-data] auto intake notify failed", {
+        organizationId: data.organizationId,
+        borrowerId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return {
     borrowerId,
     vehicleId,
     policyId,
     isNewBorrower,
+    intakeNotify,
   };
 });

@@ -15,7 +15,7 @@ import {
   type IntakeNotifyInput,
 } from "../services/intake-token";
 
-interface KickoffResponse {
+export interface KickoffResponse {
   status: "queued" | "sent";
   /** Number of borrowers contacted in this call (0 if queued for later flush). */
   sentCount: number;

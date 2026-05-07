@@ -420,8 +420,14 @@ export const createCheckoutSession = onCall(
       throw new HttpsError("invalid-argument", "Invalid plan.");
     }
 
-    // Don't allow if already has active subscription
-    if (org.stripe?.status === "active" || org.stripe?.status === "trialing") {
+    // Don't allow if already has an actual Stripe subscription. The signup
+    // bootstrap stamps a synthetic `status: trialing` placeholder before any
+    // real Stripe subscription exists, so we key off `stripeSubscriptionId`
+    // here rather than the status string.
+    if (
+      org.stripe?.stripeSubscriptionId &&
+      (org.stripe.status === "active" || org.stripe.status === "trialing")
+    ) {
       throw new HttpsError(
         "already-exists",
         "Already subscribed. Use Change Plan to switch plans."

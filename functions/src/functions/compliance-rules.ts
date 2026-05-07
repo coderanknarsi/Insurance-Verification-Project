@@ -15,7 +15,7 @@ const DEFAULT_RULES: ComplianceRules = {
   requireCollision: true,
   expirationWarningDays: 15,
   lapseGracePeriodDays: 5,
-  autoSendReminder: false,
+  autoSendReminder: true,
   reminderDaysBeforeExpiry: 10,
   timezone: DEFAULT_TIMEZONE,
 };
@@ -100,11 +100,26 @@ export const updateComplianceRules = onCall(async (request) => {
       : {}),
     expirationWarningDays: Number(data.rules.expirationWarningDays) || 15,
     lapseGracePeriodDays: Number(data.rules.lapseGracePeriodDays) || 5,
-    autoSendReminder: Boolean(data.rules.autoSendReminder),
+    autoSendReminder: data.rules.autoSendReminder !== false,
     reminderDaysBeforeExpiry: Number(data.rules.reminderDaysBeforeExpiry) || 10,
     timezone: data.rules.timezone
       ? validateTimezone(data.rules.timezone)
       : DEFAULT_TIMEZONE,
+    ...(data.rules.lapseEscalation
+      ? { lapseEscalation: data.rules.lapseEscalation }
+      : {}),
+    ...(data.rules.coverageEscalation
+      ? { coverageEscalation: data.rules.coverageEscalation }
+      : {}),
+    notificationsPaused: Boolean(data.rules.notificationsPaused),
+    ...(data.rules.notificationsPaused && !previousRules.notificationsPaused
+      ? { notificationsPausedAt: Timestamp.now() }
+      : data.rules.notificationsPaused && previousRules.notificationsPausedAt
+        ? { notificationsPausedAt: previousRules.notificationsPausedAt }
+        : {}),
+    ...(data.rules.notificationsPausedReason
+      ? { notificationsPausedReason: String(data.rules.notificationsPausedReason).slice(0, 500) }
+      : {}),
   };
 
   await collections.organizations.doc(data.organizationId).update({

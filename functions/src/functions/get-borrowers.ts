@@ -130,6 +130,7 @@ export const getBorrowers = onCall(async (request) => {
 
   // Attach last-contact summary per borrower (most recent notification).
   // One query for the whole org, then group in memory — avoids N+1.
+  const SUCCESS_NOTIFICATION_STATUSES = new Set(["SENT", "DELIVERED", "COMPLETED"]);
   const lastContactByBorrower: Record<
     string,
     { trigger: string; channel: string; status: string; sentAt: number }
@@ -140,14 +141,51 @@ export const getBorrowers = onCall(async (request) => {
       .orderBy("createdAt", "desc")
       .limit(500)
       .get();
+    const notificationsByBorrower: Record<
+      string,
+      Array<{ trigger: string; channel: string; status: string; sentAt: number }>
+    > = {};
     for (const doc of recentNotifSnap.docs) {
       const n = doc.data();
-      if (lastContactByBorrower[n.borrowerId]) continue; // already have a newer one
-      lastContactByBorrower[n.borrowerId] = {
+      const borrowerId = n.borrowerId;
+      if (!borrowerId) continue;
+      (notificationsByBorrower[borrowerId] ||= []).push({
         trigger: n.trigger,
-        channel: n.type,
+        channel: n.channel ?? n.type,
         status: n.status,
-        sentAt: n.createdAt?.toMillis?.() ?? 0,
+        sentAt: n.sentAt?.toMillis?.() ?? n.createdAt?.toMillis?.() ?? 0,
+      });
+    }
+
+    for (const [borrowerId, notifications] of Object.entries(notificationsByBorrower)) {
+      const successful = notifications.filter((n) =>
+        SUCCESS_NOTIFICATION_STATUSES.has(n.status),
+      );
+      const candidates = successful.length > 0 ? successful : notifications;
+      const primary = candidates[0];
+      if (!primary) continue;
+
+      let channel = primary.channel;
+      if (SUCCESS_NOTIFICATION_STATUSES.has(primary.status)) {
+        const siblingChannels = new Set(
+          candidates
+            .filter((n) =>
+              n.trigger === primary.trigger &&
+              Math.abs(n.sentAt - primary.sentAt) <= 60_000 &&
+              SUCCESS_NOTIFICATION_STATUSES.has(n.status),
+            )
+            .map((n) => n.channel),
+        );
+        if (siblingChannels.has("EMAIL") && siblingChannels.has("SMS")) {
+          channel = "BOTH";
+        }
+      }
+
+      lastContactByBorrower[borrowerId] = {
+        trigger: primary.trigger,
+        channel,
+        status: primary.status,
+        sentAt: primary.sentAt,
       };
     }
   }
@@ -179,7 +217,7 @@ export const getDashboardSummary = onCall(async (request) => {
 
   requireOrg(user, data.organizationId);
 
-  const [greenSnap, yellowSnap, redSnap, totalBorrowersSnap] = await Promise.all([
+  const [greenSnap, yellowSnap, redSnap, totalBorrowersSnap, totalPoliciesSnap, awaitingCredsSnap, needsHelpSnap] = await Promise.all([
     collections.policies
       .where("organizationId", "==", data.organizationId)
       .where("dashboardStatus", "==", "GREEN")
@@ -199,11 +237,36 @@ export const getDashboardSummary = onCall(async (request) => {
       .where("organizationId", "==", data.organizationId)
       .count()
       .get(),
+    collections.policies
+      .where("organizationId", "==", data.organizationId)
+      .count()
+      .get(),
+    collections.policies
+      .where("organizationId", "==", data.organizationId)
+      .where("awaitingCredentials", "==", true)
+      .count()
+      .get(),
+    collections.borrowers
+      .where("organizationId", "==", data.organizationId)
+      .where("needsHelp", "==", true)
+      .count()
+      .get(),
   ]);
 
   const green = greenSnap.data().count;
   const yellow = yellowSnap.data().count;
   const red = redSnap.data().count;
+  const totalPolicies = totalPoliciesSnap.data().count;
+  const pendingIntake = awaitingCredsSnap.data().count;
+  const needsHelp = needsHelpSnap.data().count;
+  const onboardingComplete = Math.max(0, totalPolicies - pendingIntake);
+  const onboardingCompletionRate =
+    totalPolicies > 0 ? Math.round((onboardingComplete / totalPolicies) * 1000) / 10 : 0;
+  // Conservative estimate: each automated intake saves staff ~12 minutes of
+  // phone tag, voicemail, and manual data entry vs. the legacy workflow.
+  const MINUTES_SAVED_PER_BORROWER = 12;
+  const estimatedHoursSaved =
+    Math.round(((onboardingComplete * MINUTES_SAVED_PER_BORROWER) / 60) * 10) / 10;
 
   return {
     green,
@@ -211,5 +274,11 @@ export const getDashboardSummary = onCall(async (request) => {
     red,
     actionRequired: yellow + red,
     totalBorrowers: totalBorrowersSnap.data().count,
+    totalPolicies,
+    pendingIntake,
+    needsHelp,
+    onboardingComplete,
+    onboardingCompletionRate,
+    estimatedHoursSaved,
   };
 });

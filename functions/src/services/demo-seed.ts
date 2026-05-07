@@ -24,13 +24,33 @@ function pastDate(days: number): string {
 }
 
 /**
- * Deletes all demo org data (borrowers, vehicles, policies, notifications, audit log).
+ * Deletes all seeded demo org data (the 4 showroom borrowers + their notifications).
+ *
+ * Preserves any borrower the prospect added themselves via the "Use myself as a
+ * test borrower" flow — those have a `loanNumber` starting with "TEST-" and
+ * represent the prospect's own walkthrough they'll want to see again tomorrow.
+ * Also preserves their vehicle, policy, uploaded card, notifications, and audit
+ * log entries so the full timeline is intact on next login.
  */
 export async function clearDemoData(): Promise<void> {
   const db = collections.organizations.firestore;
   const batch = db.batch();
 
-  // Delete known demo documents
+  // Collect IDs of borrowers we're preserving (test/self-walkthrough users).
+  // Their associated vehicles + policies + notifications are also preserved.
+  const allBorrowers = await collections.borrowers
+    .where("organizationId", "==", DEMO_ORG_ID)
+    .get();
+  const preservedBorrowerIds = new Set<string>();
+  for (const doc of allBorrowers.docs) {
+    const data = doc.data() as unknown as Record<string, unknown>;
+    const loanNum = String(data?.loanNumber ?? "");
+    if (data?.isDemoTestUser === true || loanNum.startsWith("TEST-")) {
+      preservedBorrowerIds.add(doc.id);
+    }
+  }
+
+  // Delete the 4 hardcoded showroom seed docs.
   for (const id of DEMO_BORROWER_IDS) {
     batch.delete(collections.borrowers.doc(id));
   }
@@ -41,12 +61,9 @@ export async function clearDemoData(): Promise<void> {
     batch.delete(collections.policies.doc(id));
   }
 
-  // Delete any extra borrowers/vehicles/policies added by demo users
-  const extraBorrowers = await collections.borrowers
-    .where("organizationId", "==", DEMO_ORG_ID)
-    .get();
-  for (const doc of extraBorrowers.docs) {
-    if (!DEMO_BORROWER_IDS.includes(doc.id)) {
+  // Delete extra borrowers/vehicles/policies UNLESS they belong to a preserved test user.
+  for (const doc of allBorrowers.docs) {
+    if (!DEMO_BORROWER_IDS.includes(doc.id) && !preservedBorrowerIds.has(doc.id)) {
       batch.delete(doc.ref);
     }
   }
@@ -55,6 +72,8 @@ export async function clearDemoData(): Promise<void> {
     .where("organizationId", "==", DEMO_ORG_ID)
     .get();
   for (const doc of extraVehicles.docs) {
+    const borrowerId = doc.data()?.borrowerId;
+    if (preservedBorrowerIds.has(borrowerId)) continue;
     if (!DEMO_VEHICLE_IDS.includes(doc.id)) {
       batch.delete(doc.ref);
     }
@@ -64,29 +83,37 @@ export async function clearDemoData(): Promise<void> {
     .where("organizationId", "==", DEMO_ORG_ID)
     .get();
   for (const doc of extraPolicies.docs) {
+    const borrowerId = doc.data()?.borrowerId;
+    if (preservedBorrowerIds.has(borrowerId)) continue;
     if (!DEMO_POLICY_IDS.includes(doc.id)) {
       batch.delete(doc.ref);
     }
   }
 
-  // Delete notifications for demo org
+  // Delete notifications EXCEPT those tied to a preserved test borrower.
   const notifications = await collections.notifications
     .where("organizationId", "==", DEMO_ORG_ID)
     .get();
   for (const doc of notifications.docs) {
+    const borrowerId = doc.data()?.borrowerId;
+    if (preservedBorrowerIds.has(borrowerId)) continue;
     batch.delete(doc.ref);
   }
 
-  // Delete audit log entries for demo org
+  // Delete audit log entries EXCEPT those tied to a preserved test borrower.
   const auditLogs = await collections.auditLog
     .where("organizationId", "==", DEMO_ORG_ID)
     .get();
   for (const doc of auditLogs.docs) {
+    const entityId = doc.data()?.entityId;
+    if (preservedBorrowerIds.has(entityId)) continue;
     batch.delete(doc.ref);
   }
 
   await batch.commit();
-  logger.info("Cleared all demo org data");
+  logger.info("Cleared seeded demo data", {
+    preservedBorrowers: preservedBorrowerIds.size,
+  });
 }
 
 /**

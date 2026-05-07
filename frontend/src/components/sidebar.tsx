@@ -18,6 +18,14 @@ interface SidebarProps {
   onSignOut: () => void;
   activeNav?: string;
   onNavChange?: (nav: string) => void;
+  /**
+   * Nav IDs that should appear dimmed and unclickable. Used during the demo
+   * first-run experience: prospects only see Dashboard until they've added
+   * their first borrower, then everything unlocks.
+   */
+  lockedNavs?: string[];
+  /** Tooltip shown on locked nav items (hover). */
+  lockedHint?: string;
 }
 
 const navItems = [
@@ -28,7 +36,7 @@ const navItems = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar({ userEmail, onSignOut, activeNav = "dashboard", onNavChange }: SidebarProps) {
+export function Sidebar({ userEmail, onSignOut, activeNav = "dashboard", onNavChange, lockedNavs = [], lockedHint }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -53,19 +61,26 @@ export function Sidebar({ userEmail, onSignOut, activeNav = "dashboard", onNavCh
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map((item) => {
           const isActive = activeNav === item.id;
+          const isLocked = lockedNavs.includes(item.id);
           return (
             <button
               key={item.id}
-              onClick={() => onNavChange?.(item.id)}
+              onClick={() => !isLocked && onNavChange?.(item.id)}
+              disabled={isLocked}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                isActive
-                  ? "bg-accent/15 text-accent"
-                  : "text-carbon-light hover:text-offwhite hover:bg-white/[0.04]"
+                isLocked
+                  ? "text-carbon-light/40 cursor-not-allowed"
+                  : isActive
+                    ? "bg-accent/15 text-accent"
+                    : "text-carbon-light hover:text-offwhite hover:bg-white/[0.04]"
               }`}
-              title={collapsed ? item.label : undefined}
+              title={isLocked ? (lockedHint ?? "Available after your first borrower") : (collapsed ? item.label : undefined)}
             >
-              <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? "text-accent" : ""}`} />
+              <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive && !isLocked ? "text-accent" : ""}`} />
               {!collapsed && <span>{item.label}</span>}
+              {!collapsed && isLocked && (
+                <span className="ml-auto text-[9px] uppercase tracking-wider text-carbon-light/50">Locked</span>
+              )}
             </button>
           );
         })}

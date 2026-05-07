@@ -187,8 +187,21 @@ export function intakeRequestSmsText(
   intakeUrl: string,
 ): string {
   return (
-    `${dealershipName}: Hi ${borrowerName}, we need to update your insurance file ` +
-    `for your ${vehicleLabel}. Please tap here to securely submit your info: ${intakeUrl}\n\n` +
-    `Reply STOP to opt out.`
+    `${dealershipName}: Hi ${borrowerName}, please send us your insurance info ` +
+    `for your ${vehicleLabel}. Tap to enter your carrier + policy # or upload a photo of your card: ${intakeUrl}\n\n` +
+    `Need help? Reply HELP or call us. Reply STOP to opt out.`
+  );
+}
+
+export function intakeReminderSmsText(
+  borrowerName: string,
+  vehicleLabel: string,
+  dealershipName: string,
+  intakeUrl: string,
+): string {
+  return (
+    `${dealershipName}: Hi ${borrowerName}, just a quick reminder — we still need your ` +
+    `insurance info for your ${vehicleLabel}. It only takes a minute: ${intakeUrl}\n\n` +
+    `Reply HELP if you're stuck. Reply STOP to opt out.`
   );
 }

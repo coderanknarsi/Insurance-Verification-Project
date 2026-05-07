@@ -16,7 +16,7 @@ import {
   Loader2,
   MessageSquare,
 } from "lucide-react";
-import { callBulkImportDeals } from "@/lib/api";
+import { callBulkImportDeals, callExtractCustomersFromFile } from "@/lib/api";
 import type { CsvRow, BulkImportResult } from "@/lib/api";
 
 interface ImportDialogProps {
@@ -263,6 +263,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
   const [showErrors, setShowErrors] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [smsConsent, setSmsConsent] = useState(false);
+  const [aiExtracting, setAiExtracting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -280,6 +281,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
     setShowErrors(false);
     setDragOver(false);
     setSmsConsent(false);
+    setAiExtracting(false);
   };
 
   const handleClose = () => {
@@ -288,48 +290,146 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
   };
 
   const handleFile = useCallback((file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      setImportError("Please select a .csv file");
-      return;
-    }
+    const lower = file.name.toLowerCase();
     setImportError(null);
     setFileName(file.name);
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const headers = results.meta.fields ?? [];
-        const rows = results.data as Record<string, string>[];
+    if (lower.endsWith(".csv")) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const headers = results.meta.fields ?? [];
+          const rows = results.data as Record<string, string>[];
 
-        if (rows.length === 0) {
-          setImportError("CSV file is empty");
+          if (rows.length === 0) {
+            setImportError("CSV file is empty");
+            return;
+          }
+          if (rows.length > 500) {
+            setImportError(`CSV has ${rows.length} rows. Maximum is 500 per import.`);
+            return;
+          }
+
+          setRawHeaders(headers);
+          setRawRows(rows);
+          const autoMapping = detectColumnContent(headers, rows);
+          setMapping(autoMapping);
+          setStep("mapping");
+        },
+        error: () => {
+          setImportError("Failed to parse CSV file");
+        },
+      });
+      return;
+    }
+
+    // AI extraction path: PDF, images.
+    const mimeMap: Record<string, string> = {
+      pdf: "application/pdf",
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+      heic: "image/heic",
+      heif: "image/heif",
+    };
+    const ext = lower.split(".").pop() ?? "";
+    const mimeType = mimeMap[ext];
+    if (!mimeType) {
+      setImportError("Please upload a .csv, .pdf, or image file (.png, .jpg, .webp, .heic).");
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      setImportError("File too large. Maximum is 20 MB.");
+      return;
+    }
+
+    setAiExtracting(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(",")[1] ?? "";
+        const resp = await callExtractCustomersFromFile({
+          organizationId,
+          fileBase64: base64,
+          mimeType,
+          fileName: file.name,
+        });
+        const aiRows = resp.data.rows ?? [];
+        if (aiRows.length === 0) {
+          setImportError(
+            "No customer rows could be extracted from this file. Try a clearer scan or a CSV export."
+          );
+          setAiExtracting(false);
           return;
         }
-        if (rows.length > 500) {
-          setImportError(`CSV has ${rows.length} rows. Maximum is 500 per import.`);
+        if (aiRows.length > 500) {
+          setImportError(`AI found ${aiRows.length} rows. Maximum is 500 per import.`);
+          setAiExtracting(false);
           return;
         }
+
+        // Convert structured rows back into a header/value table so the rest of the
+        // dialog (mapping → review → import) reuses the existing pipeline.
+        const headers = [
+          "firstName",
+          "lastName",
+          "email",
+          "phone",
+          "loanNumber",
+          "vin",
+          "make",
+          "model",
+          "year",
+          "insuranceProvider",
+          "policyNumber",
+        ];
+        const rows: Record<string, string>[] = aiRows.map((r) => {
+          const out: Record<string, string> = {};
+          for (const h of headers) {
+            const v = (r as Record<string, unknown>)[h];
+            out[h] = v == null ? "" : String(v);
+          }
+          return out;
+        });
 
         setRawHeaders(headers);
         setRawRows(rows);
-
-        // Smart auto-detect: header aliases + content analysis
-        const autoMapping = detectColumnContent(headers, rows);
-        setMapping(autoMapping);
-
-        // Skip mapping step if all 9 fields are auto-detected
-        if (countMappedFields(autoMapping) >= REQUIRED_FIELDS.length) {
-          setStep("mapping"); // still go to mapping so user can verify
-        } else {
-          setStep("mapping");
+        // Headers already match our internal field keys, so mapping is 1:1 —
+        // BUT only auto-map columns that actually have data. Empty columns
+        // (e.g. make/model/year when the source doc didn't include them)
+        // should stay unmapped so the user isn't misled by a green checkmark.
+        const csvKeys = new Set<string>([
+          "firstName", "lastName", "email", "phone",
+          "loanNumber", "vin", "make", "model", "year",
+        ]);
+        const autoMapping: Record<string, keyof CsvRow | ""> = {};
+        for (const h of headers) {
+          if (!csvKeys.has(h)) {
+            autoMapping[h] = "";
+            continue;
+          }
+          const hasData = rows.some((row) => (row[h] ?? "").trim() !== "");
+          autoMapping[h] = hasData ? (h as keyof CsvRow) : "";
         }
-      },
-      error: () => {
-        setImportError("Failed to parse CSV file");
-      },
-    });
-  }, []);
+        setMapping(autoMapping);
+        setStep("mapping");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "AI extraction failed";
+        setImportError(message);
+      } finally {
+        setAiExtracting(false);
+      }
+    };
+    reader.onerror = () => {
+      setImportError("Failed to read file");
+      setAiExtracting(false);
+    };
+    reader.readAsDataURL(file);
+  }, [organizationId]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -481,27 +581,43 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
               <div
                 className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors ${
                   dragOver ? "border-accent bg-accent/5" : "border-border-subtle hover:border-accent/40"
-                }`}
+                } ${aiExtracting ? "opacity-60 pointer-events-none" : ""}`}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
               >
-                <Upload className="w-10 h-10 text-carbon-light mx-auto mb-3" />
-                <p className="text-sm text-offwhite font-medium mb-1">
-                  Drag & drop your CSV file here
-                </p>
-                <p className="text-xs text-carbon-light mb-4">or click to browse</p>
-                <Button
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="bg-accent hover:bg-accent-hover text-white border-0"
-                >
-                  Choose File
-                </Button>
+                {aiExtracting ? (
+                  <>
+                    <Loader2 className="w-10 h-10 text-accent mx-auto mb-3 animate-spin" />
+                    <p className="text-sm text-offwhite font-medium mb-1">
+                      AI is reading your file…
+                    </p>
+                    <p className="text-xs text-carbon-light">
+                      This usually takes 10-30 seconds for PDFs.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-10 h-10 text-carbon-light mx-auto mb-3" />
+                    <p className="text-sm text-offwhite font-medium mb-1">
+                      Drag &amp; drop your customer file here
+                    </p>
+                    <p className="text-xs text-carbon-light mb-4">
+                      CSV, PDF, or image &middot; we&rsquo;ll use AI to read non-CSV files
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="bg-accent hover:bg-accent-hover text-white border-0"
+                    >
+                      Choose File
+                    </Button>
+                  </>
+                )}
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.pdf,.png,.jpg,.jpeg,.webp,.heic,.heif"
                   onChange={handleFileInput}
                   className="hidden"
                 />
@@ -524,7 +640,7 @@ export function ImportDialog({ organizationId, open, onClose, onImportComplete }
                 </Button>
               </div>
               <p className="text-[11px] text-carbon-light text-center">
-                Maximum 500 rows per import &middot; Required: Name, VIN, Email or Phone &middot; Optional: Loan #, Make, Model, Year
+                Maximum 500 rows / 20 MB &middot; CSV, PDF, or image &middot; Required: Name, VIN, Email or Phone &middot; Optional: Loan #, Make, Model, Year
               </p>
             </div>
           )}

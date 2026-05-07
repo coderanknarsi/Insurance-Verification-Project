@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Send, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function Contact() {
-  const [form, setForm] = useState({ name: '', email: '', company: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', company: '', message: '', website: '' });
   const [status, setStatus] = useState('idle'); // idle | sending | sent | error
 
   const handleChange = (e) => {
@@ -20,7 +20,7 @@ export default function Contact() {
       });
       if (!res.ok) throw new Error('Failed to send');
       setStatus('sent');
-      setForm({ name: '', email: '', company: '', message: '' });
+      setForm({ name: '', email: '', company: '', message: '', website: '' });
     } catch {
       setStatus('error');
     }
@@ -124,6 +124,18 @@ export default function Contact() {
                   className="w-full bg-navy border border-white/[0.08] rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-accent/50 transition-colors resize-none"
                 />
               </div>
+
+              {/* Honeypot — hidden; bots fill it and get silently rejected. */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={form.website}
+                onChange={handleChange}
+                aria-hidden="true"
+                style={{ position: 'absolute', left: '-10000px', width: '1px', height: '1px', opacity: 0 }}
+              />
 
               {status === 'error' && (
                 <div className="flex items-center gap-2 text-red-400 text-sm">

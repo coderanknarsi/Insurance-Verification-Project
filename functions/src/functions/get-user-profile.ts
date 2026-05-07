@@ -138,7 +138,7 @@ export const getUserProfile = onCall(async (request) => {
           requireCollision: true,
           expirationWarningDays: 15,
           lapseGracePeriodDays: 5,
-          autoSendReminder: false,
+          autoSendReminder: true,
           reminderDaysBeforeExpiry: 10,
         },
       },

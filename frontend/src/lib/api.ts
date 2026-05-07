@@ -13,6 +13,12 @@ export interface DashboardSummary {
   red: number;
   actionRequired: number;
   totalBorrowers: number;
+  totalPolicies: number;
+  pendingIntake: number;
+  needsHelp: number;
+  onboardingComplete: number;
+  onboardingCompletionRate: number;
+  estimatedHoursSaved: number;
 }
 
 interface GetBorrowersInput {
@@ -203,6 +209,56 @@ export function callGetDashboardSummary(data: GetDashboardSummaryInput) {
   return httpsCallable<GetDashboardSummaryInput, DashboardSummary>(
     getClientFunctions(),
     "getDashboardSummary"
+  )(data);
+}
+
+// ---- Staff Tasks (needs-help queue) ----
+
+export interface StaffTaskRow {
+  id: string;
+  organizationId: string;
+  borrowerId?: string;
+  borrowerName?: string;
+  borrowerPhone?: string;
+  borrowerEmail?: string;
+  policyId?: string;
+  vehicleId?: string;
+  type: string;
+  status: string;
+  priority: string;
+  title: string;
+  description?: string;
+  inboundPhone?: string;
+  inboundText?: string;
+  createdAt: number;
+  updatedAt: number;
+  resolvedAt?: number;
+  resolvedBy?: string;
+}
+
+interface GetStaffTasksInput {
+  organizationId: string;
+  status?: "OPEN" | "RESOLVED" | "ALL";
+  limit?: number;
+}
+
+export function callGetStaffTasks(data: GetStaffTasksInput) {
+  return httpsCallable<GetStaffTasksInput, { tasks: StaffTaskRow[] }>(
+    getClientFunctions(),
+    "getStaffTasks"
+  )(data);
+}
+
+interface ResolveStaffTaskInput {
+  organizationId: string;
+  taskId: string;
+  clearBorrowerNeedsHelp?: boolean;
+}
+
+export function callResolveStaffTask(data: ResolveStaffTaskInput) {
+  return httpsCallable<ResolveStaffTaskInput, { success: boolean }>(
+    getClientFunctions(),
+    "resolveStaffTask"
   )(data);
 }
 
@@ -448,6 +504,27 @@ export function callBulkImportDeals(data: {
   )(data);
 }
 
+// ---- AI Customer Extraction (PDF / Image) ----
+
+export interface ExtractCustomersInput {
+  organizationId: string;
+  /** Base64-encoded file (no `data:` prefix). */
+  fileBase64: string;
+  mimeType: string;
+  fileName?: string;
+}
+
+export interface ExtractCustomersResult {
+  rows: Array<Partial<CsvRow> & { insuranceProvider?: string; policyNumber?: string }>;
+}
+
+export function callExtractCustomersFromFile(data: ExtractCustomersInput) {
+  return httpsCallable<ExtractCustomersInput, ExtractCustomersResult>(
+    getClientFunctions(),
+    "extractCustomersFromFile"
+  )(data);
+}
+
 // ---- Add Single Borrower ----
 
 export interface IngestDealInput {
@@ -518,7 +595,7 @@ export interface VerificationRecord {
   borrowerName: string;
   borrowerEmail: string;
   borrowerPhone: string;
-  channel: "EMAIL" | "SMS" | "PORTAL";
+  channel: "EMAIL" | "SMS" | "PORTAL" | "BOTH";
   trigger: string;
   status: string;
   content: string;

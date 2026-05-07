@@ -18,6 +18,10 @@ export interface Borrower {
   smsConsentStatus?: SmsConsentStatus;
   smsOptInTimestamp?: Timestamp;
   smsOptOutTimestamp?: Timestamp;
+  /** Borrower replied HELP to an intake message; staff should follow up. */
+  needsHelp?: boolean;
+  needsHelpAt?: Timestamp;
+  needsHelpResolvedAt?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

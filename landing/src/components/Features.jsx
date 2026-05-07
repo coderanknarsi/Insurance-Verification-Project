@@ -52,6 +52,8 @@ function VerificationStatus() {
     { name: 'Progressive', status: 'Verified', color: 'bg-green-500', policy: 'AUTO-2847-X' },
     { name: 'State Farm', status: 'Lapsed', color: 'bg-red-500', policy: 'AUTO-1053-K' },
     { name: 'Allstate', status: 'Verified', color: 'bg-green-500', policy: 'AUTO-9921-B' },
+    { name: 'GEICO', status: 'Verified', color: 'bg-green-500', policy: 'AUTO-7782-J' },
+    { name: 'Nationwide', status: 'Verified', color: 'bg-green-500', policy: 'AUTO-3318-V' },
     { name: 'National General', status: 'Expiring', color: 'bg-yellow-500', policy: 'AUTO-4411-M' },
   ];
 
@@ -139,7 +141,7 @@ const features = [
     icon: ShieldCheck,
     title: 'Carrier Verification',
     description:
-      'We verify coverage directly with Progressive, State Farm, Allstate, and National General. Weekly automated checks catch lapses before they become losses.',
+      'We verify coverage directly with Progressive, State Farm, Allstate, GEICO, Nationwide, and National General. Weekly automated checks catch lapses before they become losses.',
     Component: VerificationStatus,
   },
   {
