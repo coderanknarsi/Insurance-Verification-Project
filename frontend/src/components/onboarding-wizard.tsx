@@ -39,9 +39,9 @@ const SHARED_FEATURES = [
 ];
 
 const PLANS = [
-  { id: "STARTER", name: "Starter", price: 149, vehicles: 50, features: ["Up to 50 vehicles", ...SHARED_FEATURES] },
-  { id: "GROWTH", name: "Growth", price: 349, vehicles: 150, popular: true, features: ["Up to 150 vehicles", ...SHARED_FEATURES] },
-  { id: "SCALE", name: "Scale", price: 599, vehicles: 300, features: ["Up to 300 vehicles", ...SHARED_FEATURES] },
+  { id: "STARTER", name: "Starter", price: 49, vehicles: 25, features: ["Up to 25 vehicles", ...SHARED_FEATURES] },
+  { id: "GROWTH", name: "Growth", price: 99, vehicles: 75, popular: true, features: ["Up to 75 vehicles", ...SHARED_FEATURES] },
+  { id: "SCALE", name: "Scale", price: 199, vehicles: 200, features: ["Up to 200 vehicles", ...SHARED_FEATURES] },
 ];
 
 function StepHeader({ current, total }: { current: number; total: number }) {
