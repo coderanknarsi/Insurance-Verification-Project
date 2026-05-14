@@ -154,11 +154,9 @@ export async function runSweepForOrg(
     buckets,
   };
 
-  // Active master credentials for this org → set of carrier ids
+  // Active master credentials (platform-wide) → set of carrier ids
   const credsSnap = await db
-    .collection("organizations")
-    .doc(orgId)
-    .collection("carrierCredentials")
+    .collection("masterCredentials")
     .where("active", "==", true)
     .get();
   const activeCarriers = new Set(credsSnap.docs.map((d) => d.id));

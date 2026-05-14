@@ -43,11 +43,9 @@ export const getBorrowers = onCall(async (request) => {
   const borrowerSnap = await borrowerQuery.get();
   const borrowers = borrowerSnap.docs.map((doc) => doc.data());
 
-  // Pre-load org's active carrier credentials once for verification state classification.
+  // Pre-load active master credentials (platform-wide) for verification state classification.
   const credsSnap = await db
-    .collection("organizations")
-    .doc(data.organizationId)
-    .collection("carrierCredentials")
+    .collection("masterCredentials")
     .where("active", "==", true)
     .get();
   const activeCarriers = new Set(credsSnap.docs.map((d) => d.id));

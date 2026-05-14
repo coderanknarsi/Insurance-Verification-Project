@@ -69,11 +69,9 @@ export const dailyExpiryReminder = onSchedule(
       const now = new Date();
       const todayMs = now.getTime();
 
-      // Pre-load active master creds once per org (set of carrier ids)
+      // Pre-load active master credentials (platform-wide) once per org
       const credsSnap = await db
-        .collection("organizations")
-        .doc(orgDoc.id)
-        .collection("carrierCredentials")
+        .collection("masterCredentials")
         .where("active", "==", true)
         .get();
       const activeCarriers = new Set(credsSnap.docs.map((d) => d.id));
