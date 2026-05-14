@@ -5,6 +5,7 @@ import { sendReminderEmail, sendDealerLapseAlertEmail } from "../services/email"
 import { sendSms, expiryReminderSmsText, isWithinSendingHours } from "../services/telnyx";
 import {
   getPolicyVerificationState,
+  normalizeCarrier,
   VerificationState,
 } from "../services/verification-eligibility";
 import { CadenceMode, shouldRemindAt } from "../services/expiry-cadence";
@@ -74,7 +75,17 @@ export const dailyExpiryReminder = onSchedule(
         .collection("masterCredentials")
         .where("active", "==", true)
         .get();
-      const activeCarriers = new Set(credsSnap.docs.map((d) => d.id));
+      const activeCarriers = new Set(
+        credsSnap.docs.flatMap((doc) => {
+          const d = doc.data() as {
+            carrierId?: string;
+            carrierName?: string;
+          };
+          return [doc.id, d.carrierId, d.carrierName]
+            .map((v) => normalizeCarrier(v))
+            .filter(Boolean);
+        }),
+      );
 
       const policiesSnap = await collections.policies
         .where("organizationId", "==", orgDoc.id)

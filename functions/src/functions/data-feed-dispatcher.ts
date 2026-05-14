@@ -159,7 +159,17 @@ export async function runSweepForOrg(
     .collection("masterCredentials")
     .where("active", "==", true)
     .get();
-  const activeCarriers = new Set(credsSnap.docs.map((d) => d.id));
+  const activeCarriers = new Set(
+    credsSnap.docs.flatMap((doc) => {
+      const d = doc.data() as {
+        carrierId?: string;
+        carrierName?: string;
+      };
+      return [doc.id, d.carrierId, d.carrierName]
+        .map((v) => normalizeCarrier(v))
+        .filter(Boolean);
+    }),
+  );
 
   const policiesSnap = await db
     .collection("policies")

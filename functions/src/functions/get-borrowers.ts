@@ -5,6 +5,7 @@ import { requireAuth, requireOrg } from "../middleware/auth";
 import { DashboardStatus, PolicyStatus, ComplianceIssue } from "../types/policy";
 import {
   getPolicyVerificationState,
+  normalizeCarrier,
   VerificationState,
 } from "../services/verification-eligibility";
 
@@ -48,7 +49,17 @@ export const getBorrowers = onCall(async (request) => {
     .collection("masterCredentials")
     .where("active", "==", true)
     .get();
-  const activeCarriers = new Set(credsSnap.docs.map((d) => d.id));
+  const activeCarriers = new Set(
+    credsSnap.docs.flatMap((doc) => {
+      const d = doc.data() as {
+        carrierId?: string;
+        carrierName?: string;
+      };
+      return [doc.id, d.carrierId, d.carrierName]
+        .map((v) => normalizeCarrier(v))
+        .filter(Boolean);
+    }),
+  );
 
   // For each borrower, fetch their vehicles and policies
   const enriched = await Promise.all(
