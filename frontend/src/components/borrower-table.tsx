@@ -739,8 +739,22 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                             </div>
                           )}
                           </div>
+                        ) : borrower.lastVerifiedAt ? (
+                          <span
+                            className="text-xs text-carbon-light"
+                            title="Automated carrier check completed."
+                          >
+                            Auto-verified
+                          </span>
+                        ) : borrower.verificationState === "INSURED_SUPPORTED" ? (
+                          <span
+                            className="text-xs text-blue-400"
+                            title="Auto Lien Tracker can run the carrier check automatically; no dealership action is needed."
+                          >
+                            Queued
+                          </span>
                         ) : (
-                          <span className="text-xs text-carbon-light">Auto-verified</span>
+                          <span className="text-xs text-carbon-light">No action</span>
                         )}
                       </TableCell>
                     </TableRow>

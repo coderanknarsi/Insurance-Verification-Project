@@ -28,9 +28,9 @@ export const DASHBOARD_STATUS_HELP: Record<string, HelpItem> = {
 
 export const VERIFICATION_STATUS_HELP: Record<string, HelpItem> = {
   INSURED_SUPPORTED: {
-    label: "Verified",
-    description: "The carrier is supported and portal credentials are available, so this policy is eligible for automated deep verification.",
-    className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+    label: "Auto-check queued",
+    description: "Proof is on file and Auto Lien Tracker can run the carrier check automatically; no dealership action is needed.",
+    className: "border-blue-500/30 bg-blue-500/10 text-blue-400",
   },
   PENDING_UPLOAD: {
     label: "Awaiting upload",
@@ -43,10 +43,16 @@ export const VERIFICATION_STATUS_HELP: Record<string, HelpItem> = {
     className: "border-slate-500/30 bg-slate-500/10 text-slate-300",
   },
   INSURED_NO_CREDS: {
-    label: "Add credentials",
-    description: "The carrier is supported, but active portal credentials are missing, so automated verification cannot run yet.",
-    className: "border-orange-500/30 bg-orange-500/10 text-orange-400",
+    label: "Verification pending",
+    description: "Proof is on file, but Auto Lien Tracker needs to handle this carrier before an automated check can run.",
+    className: "border-blue-500/30 bg-blue-500/10 text-blue-400",
   },
+};
+
+export const COMPLETED_VERIFICATION_HELP: HelpItem = {
+  label: "Verified",
+  description: "An automated carrier check completed and confirmed the policy details.",
+  className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
 };
 
 export const COMPLIANCE_ISSUE_HELP: Record<string, HelpItem> = {
@@ -163,9 +169,11 @@ export function StatusKey() {
           <div className="border-t border-border-subtle pt-4">
             <p className="mb-2 text-[10px] font-mono uppercase tracking-wider text-carbon-light">Verification</p>
             <div className="space-y-3">
-              <StatusKeyRow item={VERIFICATION_STATUS_HELP.INSURED_SUPPORTED} icon={ShieldCheck} />
+              <StatusKeyRow item={COMPLETED_VERIFICATION_HELP} icon={ShieldCheck} />
+              <StatusKeyRow item={VERIFICATION_STATUS_HELP.INSURED_SUPPORTED} icon={Clock} />
               <StatusKeyRow item={COMPLIANCE_ISSUE_HELP.UNVERIFIED} icon={Clock} />
               <StatusKeyRow item={VERIFICATION_STATUS_HELP.PENDING_UPLOAD} icon={Clock} />
+              <StatusKeyRow item={VERIFICATION_STATUS_HELP.INSURED_NO_CREDS} icon={Clock} />
               <StatusKeyRow item={VERIFICATION_STATUS_HELP.INSURED_UNSUPPORTED} icon={ShieldOff} />
             </div>
           </div>
