@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { BorrowerCommunicationTimeline } from "@/components/borrower-communication-timeline";
 import { callUpdateBorrower, callDeleteBorrower, callDealerSubmitInsurance } from "@/lib/api";
 import type { BorrowerWithVehicles, PolicyData } from "@/lib/api";
+import { getComplianceIssueHelp } from "@/components/status-help";
 
 interface BorrowerDetailPanelProps {
   borrower: BorrowerWithVehicles;
@@ -13,22 +14,6 @@ interface BorrowerDetailPanelProps {
   onUpdated?: () => void;
   onDeleted?: () => void;
 }
-
-const ISSUE_LABELS: Record<string, string> = {
-  MISSING_LIENHOLDER: "Lienholder not listed on policy",
-  NO_COMPREHENSIVE: "Missing comprehensive coverage",
-  NO_COLLISION: "Missing collision coverage",
-  DEDUCTIBLE_TOO_HIGH: "Deductible exceeds maximum",
-  POLICY_CANCELLED: "Policy has been cancelled",
-  POLICY_EXPIRED: "Policy has expired",
-  PENDING_CANCELLATION: "Policy pending cancellation",
-  VIN_MISMATCH: "VIN does not match records",
-  VEHICLE_REMOVED: "Vehicle removed from policy",
-  COVERAGE_EXPIRED: "Coverage period has expired",
-  EXPIRING_SOON: "Policy expiring soon",
-  UNVERIFIED: "Pending deep verification",
-  AWAITING_CREDENTIALS: "Awaiting insurance info from borrower",
-};
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Active",
@@ -514,10 +499,12 @@ export function BorrowerDetailPanel({ borrower, onClose, onUpdated, onDeleted }:
           <Section title="Compliance Issues" icon={AlertTriangle}>
             <div className="space-y-1.5">
               {issues.map((issue) => {
+                const help = getComplianceIssueHelp(issue);
                 const isInfo = issue === "UNVERIFIED";
                 return (
                   <div
                     key={issue}
+                    title={`${help.label}: ${help.description}`}
                     className={`flex items-start gap-2 px-2.5 py-2 rounded-lg ${
                       isInfo
                         ? "bg-blue-500/5 border border-blue-500/15"
@@ -531,7 +518,7 @@ export function BorrowerDetailPanel({ borrower, onClose, onUpdated, onDeleted }:
                       <p className={`text-xs font-medium ${
                         isInfo ? "text-blue-400" : "text-red-400"
                       }`}>
-                        {ISSUE_LABELS[issue] ?? issue}
+                        {help.label}
                       </p>
                     </div>
                   </div>
@@ -560,7 +547,7 @@ export function BorrowerDetailPanel({ borrower, onClose, onUpdated, onDeleted }:
         {awaitingCreds && (
           <Section title="Complete for borrower" icon={Send}>
             <p className="text-[11px] text-carbon-light mb-2 leading-relaxed">
-              Borrower hasn't submitted their insurance yet. If they shared
+              Borrower hasn&apos;t submitted their insurance yet. If they shared
               their carrier and policy number with you directly, you can enter
               it below to move them to verified.
             </p>

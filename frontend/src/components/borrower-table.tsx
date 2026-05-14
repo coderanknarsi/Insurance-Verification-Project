@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge, StatusDot } from "@/components/status-badge";
 import { BorrowerVerificationBadge } from "@/components/borrower-verification-badge";
+import { DASHBOARD_STATUS_HELP, StatusKey, getComplianceIssueHelp } from "@/components/status-help";
 import { callGetBorrowers } from "@/lib/api";
 import type { BorrowerWithVehicles } from "@/lib/api";
 import { Search, Send, Upload, UserPlus, Loader2, X } from "lucide-react";
@@ -56,20 +57,11 @@ const filterTabs: { value: StatusFilter; label: string; dotColor?: string }[] = 
   { value: "AWAITING_INFO", label: "Awaiting Info", dotColor: "bg-orange-400" },
 ];
 
-const ISSUE_LABELS: Record<string, string> = {
-  MISSING_LIENHOLDER: "No Lienholder",
-  NO_COMPREHENSIVE: "No Comp",
-  NO_COLLISION: "No Collision",
-  DEDUCTIBLE_TOO_HIGH: "High Deductible",
-  POLICY_CANCELLED: "Cancelled",
-  POLICY_EXPIRED: "Expired",
-  PENDING_CANCELLATION: "Pending Cancel",
-  VIN_MISMATCH: "VIN Mismatch",
-  VEHICLE_REMOVED: "Removed",
-  COVERAGE_EXPIRED: "Coverage Expired",
-  EXPIRING_SOON: "Expiring Soon",
-  UNVERIFIED: "Pending Verification",
-  AWAITING_CREDENTIALS: "Awaiting Info",
+const FILTER_HELP: Partial<Record<StatusFilter, string>> = {
+  GREEN: DASHBOARD_STATUS_HELP.GREEN.description,
+  YELLOW: DASHBOARD_STATUS_HELP.YELLOW.description,
+  RED: DASHBOARD_STATUS_HELP.RED.description,
+  AWAITING_INFO: "Borrowers still missing insurance details or proof.",
 };
 
 const CONTACT_TRIGGER_LABELS: Record<string, string> = {
@@ -339,7 +331,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
     <div className="bg-card-bg border border-border-subtle rounded-xl overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-6 py-4 border-b border-border-subtle">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {searchOpen ? (
             <div className="flex items-center gap-2 bg-surface border border-border-subtle rounded-lg px-3 py-1.5 min-w-[240px]">
               <Search className="w-3.5 h-3.5 text-carbon-light flex-shrink-0" />
@@ -424,6 +416,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
               </div>
             </div>
           )}
+          <StatusKey />
           <div className="flex gap-1 bg-surface rounded-lg p-1">
             {filter === "ACTION_REQUIRED" && (
               <button
@@ -438,6 +431,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
               <button
                 key={tab.value}
                 onClick={() => setFilter(tab.value)}
+                title={FILTER_HELP[tab.value] ? `${tab.label}: ${FILTER_HELP[tab.value]}` : tab.label}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 ${
                   filter === tab.value
                     ? "bg-accent/15 text-accent"
@@ -680,18 +674,18 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                       <TableCell>
                         {issues.length > 0 ? (
                           <div className="flex flex-wrap gap-1 max-w-[200px]">
-                            {issues.slice(0, 2).map((issue) => (
-                              <span
-                                key={issue}
-                                className={`inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border ${
-                                  issue === "UNVERIFIED"
-                                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                    : "bg-red-500/10 text-red-400 border-red-500/20"
-                                }`}
-                              >
-                                {ISSUE_LABELS[issue] ?? issue}
-                              </span>
-                            ))}
+                            {issues.slice(0, 2).map((issue) => {
+                              const help = getComplianceIssueHelp(issue);
+                              return (
+                                <span
+                                  key={issue}
+                                  title={`${help.label}: ${help.description}`}
+                                  className={`inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border ${help.className}`}
+                                >
+                                  {help.label}
+                                </span>
+                              );
+                            })}
                             {issues.length > 2 && (
                               <span className="inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded bg-surface text-carbon-light">
                                 +{issues.length - 2}
