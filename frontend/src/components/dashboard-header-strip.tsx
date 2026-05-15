@@ -27,16 +27,17 @@ function formatRelative(ms: number | null | undefined): string {
 export function DashboardHeaderStrip({ organizationId }: DashboardHeaderStripProps) {
   const [status, setStatus] = useState<OrgVerificationStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     callGetOrgVerificationStatus({ organizationId })
       .then(({ data }) => {
         if (!cancelled) setStatus(data);
       })
       .catch((err) => {
         console.error("[DashboardHeaderStrip] failed", err);
+        if (!cancelled) setHasError(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -47,9 +48,15 @@ export function DashboardHeaderStrip({ organizationId }: DashboardHeaderStripPro
   }, [organizationId]);
 
   if (loading || !status) {
+    // If data cannot be loaded, hide this optional strip instead of showing
+    // an indefinite shimmer that looks broken.
+    if (hasError && !status) {
+      return null;
+    }
+
     return (
       <div className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 mb-4">
-        <div className="h-5 w-64 animate-pulse rounded bg-white/5" />
+        <div className="h-5 w-64 rounded bg-white/5" />
       </div>
     );
   }
