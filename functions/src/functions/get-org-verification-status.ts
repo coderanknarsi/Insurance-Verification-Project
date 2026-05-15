@@ -1,10 +1,12 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
 import { collections } from "../config/firestore";
 import { db } from "../config/firebase";
 import { requireAuth, requireOrg } from "../middleware/auth";
 import {
   getOrgVerificationDay,
   getPolicyVerificationState,
+  normalizeCarrier,
   VerificationState,
 } from "../services/verification-eligibility";
 
@@ -57,12 +59,20 @@ export const getOrgVerificationStatus = onCall(
     const isOverride = typeof override === "number";
 
     const credsSnap = await db
-      .collection("organizations")
-      .doc(data.organizationId)
-      .collection("carrierCredentials")
+      .collection("masterCredentials")
       .where("active", "==", true)
       .get();
-    const activeCarriers = new Set(credsSnap.docs.map((d) => d.id));
+    const activeCarriers = new Set(
+      credsSnap.docs.flatMap((doc) => {
+        const d = doc.data() as {
+          carrierId?: string;
+          carrierName?: string;
+        };
+        return [doc.id, d.carrierId, d.carrierName]
+          .map((v) => normalizeCarrier(v))
+          .filter(Boolean);
+      }),
+    );
 
     const policiesSnap = await collections.policies
       .where("organizationId", "==", data.organizationId)
@@ -97,15 +107,24 @@ export const getOrgVerificationStatus = onCall(
     }
 
     // Last completed sweep that included this org.
-    const lastRunSnap = await db
-      .collection("dataFeedRuns")
-      .where("orgsProcessed", "array-contains", data.organizationId)
-      .orderBy("completedAt", "desc")
-      .limit(1)
-      .get();
-    const lastSweepAt = lastRunSnap.empty
-      ? null
-      : lastRunSnap.docs[0].data().completedAt?.toMillis?.() ?? null;
+    let lastSweepAt: number | null = null;
+    try {
+      const lastRunSnap = await db
+        .collection("dataFeedRuns")
+        .where("orgsProcessed", "array-contains", data.organizationId)
+        .orderBy("completedAt", "desc")
+        .limit(1)
+        .get();
+      lastSweepAt = lastRunSnap.empty
+        ? null
+        : lastRunSnap.docs[0].data().completedAt?.toMillis?.() ?? null;
+    } catch (err) {
+      // Do not fail the whole header strip if this optional query lacks an index.
+      logger.warn("[getOrgVerificationStatus] Unable to read last sweep run", {
+        organizationId: data.organizationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     return {
       verificationDayOfWeek: day,
