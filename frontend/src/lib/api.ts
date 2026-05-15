@@ -778,6 +778,29 @@ export function callDeleteOrganization(data: { organizationId: string }) {
   )(data);
 }
 
+export interface SimulateVerificationSweepResult {
+  runId: string;
+  orgId: string;
+  batches: number;
+  policies: number;
+  successCount: number;
+  errorCount: number;
+  buckets: {
+    pendingUpload: number;
+    insuredSupported: number;
+    insuredUnsupported: number;
+    insuredNoCreds: number;
+  };
+  durationMs: number;
+}
+
+export function callSimulateVerificationSweep(data: { orgId: string; persistRun?: boolean }) {
+  return httpsCallable<typeof data, SimulateVerificationSweepResult>(
+    getClientFunctions(),
+    "simulateVerificationSweep"
+  )(data);
+}
+
 // Demo
 export function callGetDemoToken() {
   return httpsCallable<void, { token: string }>(

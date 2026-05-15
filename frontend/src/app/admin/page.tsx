@@ -8,6 +8,7 @@ import {
   callGetAdminDashboard,
   callGetAdminOrgDetail,
   callDeleteOrganization,
+  callSimulateVerificationSweep,
   callSaveMasterCredential,
   callGetMasterCredentials,
   callDeleteMasterCredential,
@@ -15,6 +16,7 @@ import {
   type AdminOrgSummary,
   type AdminOrgDetailData,
   type CarrierCredentialMeta,
+  type SimulateVerificationSweepResult,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +109,8 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [simulatingOrgId, setSimulatingOrgId] = useState<string | null>(null);
+  const [sweepResult, setSweepResult] = useState<SimulateVerificationSweepResult | null>(null);
 
   const handleDeleteOrg = async () => {
     if (!deleteTarget || deleteConfirmText !== deleteTarget.name) return;
@@ -137,6 +141,25 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   }, []);
+
+  const handleSimulateSweep = async (orgId: string) => {
+    setSimulatingOrgId(orgId);
+    setSweepResult(null);
+    setError(null);
+    try {
+      const res = await callSimulateVerificationSweep({ orgId, persistRun: true });
+      setSweepResult(res.data);
+      await fetchData();
+      if (expandedOrg === orgId) {
+        const detail = await callGetAdminOrgDetail({ organizationId: orgId });
+        setOrgDetail(detail.data);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to run verification sweep");
+    } finally {
+      setSimulatingOrgId(null);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -259,6 +282,12 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {sweepResult && (
+          <div className="bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg p-4 text-sm">
+            Sweep completed for <strong>{sweepResult.orgId}</strong>: {sweepResult.successCount} verified, {sweepResult.errorCount} errors, {sweepResult.policies} policies scanned in {Math.round(sweepResult.durationMs / 1000)}s.
+          </div>
+        )}
+
         {loading && !data ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-pulse text-muted-foreground">Loading platform data…</div>
@@ -354,7 +383,7 @@ export default function AdminDashboard() {
                           <SortHeader field="borrowerCount">Borrowers</SortHeader>
                           <SortHeader field="userCount">Users</SortHeader>
                           <SortHeader field="createdAt">Created</SortHeader>
-                          <TableHead className="w-12"></TableHead>
+                          <TableHead className="w-40 text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -392,18 +421,38 @@ export default function AdminDashboard() {
                                   <TableCell className="text-muted-foreground">{formatDate(org.createdAt)}</TableCell>
                                   <TableCell>
                                     {org.id !== "demo-org" && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-muted-foreground hover:text-red-500"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setDeleteTarget({ id: org.id, name: org.name });
-                                          setDeleteConfirmText("");
-                                        }}
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
+                                      <div className="flex items-center justify-end gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={simulatingOrgId === org.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSimulateSweep(org.id);
+                                          }}
+                                        >
+                                          {simulatingOrgId === org.id ? (
+                                            <>
+                                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                              Running...
+                                            </>
+                                          ) : (
+                                            "Run Sweep"
+                                          )}
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeleteTarget({ id: org.id, name: org.name });
+                                            setDeleteConfirmText("");
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
                                     )}
                                   </TableCell>
                                 </TableRow>
