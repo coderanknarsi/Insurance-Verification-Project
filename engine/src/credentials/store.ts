@@ -4,6 +4,10 @@ import { decryptCredential } from "./crypto.js";
 
 let db: Firestore | null = null;
 
+function normalizeCarrierKey(value: string | undefined | null): string {
+  return (value ?? "").toLowerCase().trim().replace(/\s+/g, "_");
+}
+
 function getDb(): Firestore {
   if (!db) {
     db = new Firestore({
@@ -20,17 +24,31 @@ function getDb(): Firestore {
 export async function getCarrierCredentials(
   carrierId: string
 ): Promise<CarrierCredentialPayload | null> {
-  const doc = await getDb()
+  const normalizedCarrierId = normalizeCarrierKey(carrierId);
+
+  // Fast path: exact document id lookup.
+  const directDoc = await getDb()
     .collection("masterCredentials")
     .doc(carrierId)
     .get();
 
-  if (!doc.exists) return null;
+  if (directDoc.exists) {
+    const credential = directDoc.data() as CarrierCredential;
+    if (credential.active) return decryptCredential(credential);
+  }
 
-  const credential = doc.data() as CarrierCredential;
-  if (!credential.active) return null;
+  // Backward-compatible fallback for legacy records whose document id does not
+  // match the normalized carrier id exactly.
+  const snap = await getDb().collection("masterCredentials").get();
+  const match = snap.docs.find((doc) => {
+    const data = doc.data() as CarrierCredential;
+    const keys = [doc.id, data.carrierId, data.carrierName].map(normalizeCarrierKey);
+    return data.active && keys.includes(normalizedCarrierId);
+  });
 
-  return decryptCredential(credential);
+  if (!match) return null;
+
+  return decryptCredential(match.data() as CarrierCredential);
 }
 
 /**
