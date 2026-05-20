@@ -174,7 +174,7 @@ export async function startSweepInExtension(
   try {
     const resp = await sendMessage<{ ok: true } | { ok: false; error: string }>(
       id,
-      { type: "START_SWEEP", payload },
+      { type: "START_SWEEP", ...payload },
       10_000,
     );
     return resp;
