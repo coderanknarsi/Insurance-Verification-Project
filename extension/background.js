@@ -47,7 +47,7 @@ async function findStateFarmTab() {
   return onSearch ?? tabs[0] ?? null;
 }
 
-function sendToTab(tabId, message, timeoutMs = 120_000) {
+function sendToTab(tabId, message, timeoutMs = 15_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`content-script timed out after ${timeoutMs}ms`)),
@@ -62,6 +62,117 @@ function sendToTab(tabId, message, timeoutMs = 120_000) {
       }
     });
   });
+}
+
+async function ensureContentScript(tabId) {
+  // Inject if the tab was open before the extension installed/reloaded.
+  try {
+    await sendToTab(tabId, { type: "PROBE_STATE" }, 1500);
+    return; // already responding
+  } catch {
+    // fall through and inject
+  }
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content-script.js"],
+  });
+}
+
+function waitForTabComplete(tabId, timeoutMs = 30_000) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(handler);
+      reject(new Error(`Tab navigation did not complete within ${timeoutMs}ms`));
+    }, timeoutMs);
+    function handler(id, info) {
+      if (id !== tabId) return;
+      if (info.status === "complete") {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(handler);
+        // small settle delay for SPA-ish post-load script work
+        setTimeout(resolve, 400);
+      }
+    }
+    chrome.tabs.onUpdated.addListener(handler);
+  });
+}
+
+async function probeStateWithRetry(tabId, expectedStates, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastState = null;
+  while (Date.now() < deadline) {
+    try {
+      await ensureContentScript(tabId);
+      const resp = await sendToTab(tabId, { type: "PROBE_STATE" }, 3000);
+      lastState = resp;
+      if (expectedStates.includes(resp.state)) return resp;
+    } catch (err) {
+      lastState = { state: "error", error: String(err) };
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(
+    `Page never reached ${expectedStates.join("|")} (last seen: ${JSON.stringify(lastState)})`,
+  );
+}
+
+async function verifyOnePolicy(tabId, policy) {
+  // 1. Ensure we're on Search page.
+  let state = await probeStateWithRetry(tabId, ["search"], 10_000).catch(() => null);
+  if (!state) {
+    // Try to navigate back to search.
+    await ensureContentScript(tabId);
+    await sendToTab(tabId, { type: "BACK_TO_SEARCH" }).catch(() => {});
+    await waitForTabComplete(tabId).catch(() => {});
+    state = await probeStateWithRetry(tabId, ["search"], 10_000);
+  }
+
+  // 2. Fill VIN and submit.
+  const submit = await sendToTab(tabId, { type: "FILL_AND_SUBMIT", vin: policy.vin });
+  if (!submit?.ok) throw new Error(submit?.error || "FILL_AND_SUBMIT failed");
+  await waitForTabComplete(tabId).catch(() => {});
+
+  // 3. Probe — may be auto-selection, policy-info, no-results, or still search.
+  state = await probeStateWithRetry(
+    tabId,
+    ["auto-selection", "policy-info", "no-results"],
+    20_000,
+  );
+
+  if (state.state === "no-results") {
+    throw new Error(`State Farm returned no results for VIN ${policy.vin}`);
+  }
+
+  // 4. If Auto Selection, pick a row.
+  if (state.state === "auto-selection") {
+    const pick = await sendToTab(tabId, {
+      type: "PICK_AUTO_SELECTION",
+      lastName: policy.borrowerLastName,
+      policyNumber: policy.policyNumber,
+    });
+    if (!pick?.ok) throw new Error(pick?.error || "PICK_AUTO_SELECTION failed");
+    console.log(`[alt-helper] picked auto-selection row by ${pick.picked}: ${pick.rowText}`);
+    await waitForTabComplete(tabId).catch(() => {});
+    state = await probeStateWithRetry(tabId, ["policy-info", "no-results"], 20_000);
+    if (state.state === "no-results") {
+      throw new Error(`State Farm returned no policy info after selecting row for VIN ${policy.vin}`);
+    }
+  }
+
+  // 5. Scrape policy info.
+  const scrapeResp = await sendToTab(tabId, { type: "SCRAPE" });
+  if (!scrapeResp?.ok) throw new Error(scrapeResp?.error || "SCRAPE failed");
+
+  // 6. Navigate back to Search for the next VIN (best-effort).
+  await sendToTab(tabId, { type: "BACK_TO_SEARCH" }).catch(() => {});
+  await waitForTabComplete(tabId).catch(() => {});
+
+  return scrapeResp.scraped;
 }
 
 async function broadcastToDashboardTabs(message) {
@@ -137,12 +248,13 @@ async function runSweep({ runId, policies, idToken, projectId, organizationId })
 
       let scraped = null;
       let errorReason = null;
+      console.log(`[alt-helper] VIN ${i + 1}/${policies.length}: ${policy.vin} → tab ${tab.id} (${tab.url})`);
       try {
-        const resp = await sendToTab(tab.id, { type: "VERIFY_POLICY", policy });
-        if (!resp?.ok) throw new Error(resp?.error || "Content script returned no data");
-        scraped = resp.scraped;
+        scraped = await verifyOnePolicy(tab.id, policy);
+        console.log(`[alt-helper] scraped for ${policy.vin}:`, scraped);
       } catch (err) {
         errorReason = err instanceof Error ? err.message : String(err);
+        console.error(`[alt-helper] VIN ${policy.vin} failed:`, errorReason);
       }
 
       try {
