@@ -87,5 +87,19 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+
+    // Data-feed runs: a user can read a run they created (so the dashboard
+    // can subscribe to live sweep progress); writes are server-side only.
+    match /dataFeedRuns/{runId} {
+      allow read: if request.auth != null &&
+        resource.data.createdBy == request.auth.uid;
+      allow write: if false;
+
+      match /results/{policyId} {
+        allow read: if request.auth != null &&
+          get(/databases/$(database)/documents/dataFeedRuns/$(runId)).data.createdBy == request.auth.uid;
+        allow write: if false;
+      }
+    }
   }
 }

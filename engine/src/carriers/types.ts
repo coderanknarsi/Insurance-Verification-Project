@@ -40,6 +40,12 @@ export interface CarrierModule {
   buildSearchTasks(input: VerificationInput): AgentTask[];
 
   /**
+   * Optional deterministic browser preparation before AI search/extraction tasks.
+   * Useful for carrier pages where simple button clicks need app-specific events.
+   */
+  prepareSearch?(page: Page, input: VerificationInput): Promise<void>;
+
+  /**
    * Check if the current page indicates we're still logged in.
    */
   isSessionActive(page: Page): Promise<boolean>;

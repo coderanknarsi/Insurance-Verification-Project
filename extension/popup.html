@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>AutoLienTracker Helper</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        padding: 16px;
+        width: 320px;
+        font-size: 13px;
+        color: #1f2937;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 12px 0;
+        color: #111827;
+      }
+      .phase {
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .phase.idle { color: #6b7280; }
+      .phase.running { color: #2563eb; }
+      .phase.done { color: #16a34a; }
+      .phase.error { color: #dc2626; }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        margin: 4px 0;
+        color: #374151;
+      }
+      .message {
+        margin-top: 10px;
+        padding: 8px;
+        background: #f3f4f6;
+        border-radius: 4px;
+        word-break: break-word;
+      }
+      progress {
+        width: 100%;
+        height: 6px;
+        margin-top: 6px;
+      }
+      button {
+        margin-top: 12px;
+        padding: 6px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        border-radius: 4px;
+      }
+      button:hover { background: #f9fafb; }
+      .hint {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AutoLienTracker Helper</h1>
+    <div id="phase" class="phase idle">Idle</div>
+    <div class="row"><span>Progress</span><span id="counter">—</span></div>
+    <progress id="bar" value="0" max="1"></progress>
+    <div class="row"><span>Success</span><span id="success">0</span></div>
+    <div class="row"><span>Errors</span><span id="errors">0</span></div>
+    <div id="message" class="message">Start a State Farm sweep from your admin dashboard.</div>
+    <button id="open-sf">Open State Farm tab</button>
+    <div class="hint">
+      Make sure you are logged in to State Farm B2B and on the Insurance Inquiry
+      Tool's Policy Search page before starting a sweep.
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

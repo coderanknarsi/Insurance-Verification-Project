@@ -3,15 +3,55 @@ import { ImapFlow } from "imapflow";
 const IMAP_HOST = "imap.gmail.com";
 const IMAP_PORT = 993;
 const POLL_INTERVAL_MS = 5_000;
-const POLL_TIMEOUT_MS = 360_000;
+const DEFAULT_POLL_TIMEOUT_MS = 360_000;
+const CARRIER_POLL_TIMEOUT_MS: Record<string, number> = {
+  state_farm: 300_000,
+};
 
-/** OTP email sender addresses by carrier */
+/** OTP email sender search terms by carrier */
 const OTP_SENDERS: Record<string, string> = {
   progressive: "support_prove@otp.progressive.com",
-  state_farm: "no-reply@c1.statefarm",
+  state_farm: "statefarm",
   allstate: "allstate@service01.email-allstate.com",
-  nationwide: "noreply@nationwide.com",
 };
+
+export function getOtpPollTimeoutMs(carrierId: string): number {
+  return CARRIER_POLL_TIMEOUT_MS[carrierId] ?? DEFAULT_POLL_TIMEOUT_MS;
+}
+
+function decodeQuotedPrintable(body: string): string {
+  return body
+    .replace(/=\r?\n/g, "")
+    .replace(/=([0-9A-F]{2})/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+export function extractOtpCodeFromEmail(body: string, carrierId: string): string | null {
+  const decodedBody = decodeQuotedPrintable(body);
+  const htmlStart = decodedBody.indexOf("<html");
+  const htmlBody = htmlStart >= 0 ? decodedBody.substring(htmlStart) : decodedBody;
+  const textBody = htmlBody
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (carrierId === "state_farm") {
+    const stateFarmMatch =
+      textBody.match(/code you requested[\s\S]{0,200}?((?:\d\s*){8})/i) ??
+      textBody.match(/verify your identity[\s\S]{0,200}?((?:\d\s*){8})/i) ??
+      textBody.match(/\b((?:\d\s*){8})\b/);
+
+    const code = stateFarmMatch?.[1]?.replace(/\D/g, "") ?? null;
+    return code && code.length === 8 ? code : null;
+  }
+
+  const match =
+    htmlBody.match(/>\s*(\d{6})\s*</) ??
+    textBody.match(/Verification Code[\s\S]{0,80}?(\d{6})/i) ??
+    textBody.match(/\b(\d{6})\b/);
+
+  return match?.[1] ?? null;
+}
 
 /**
  * Connects to the configured IMAP mailbox (Gmail via App Password),
@@ -26,7 +66,8 @@ const OTP_SENDERS: Record<string, string> = {
 export async function fetchOtpCode(
   carrierId: string,
   /** Only consider emails received after this timestamp */
-  sinceTimestamp?: Date
+  sinceTimestamp?: Date,
+  timeoutMs = getOtpPollTimeoutMs(carrierId),
 ): Promise<string | null> {
   const user = process.env.IMAP_USER;
   const pass = process.env.IMAP_APP_PASSWORD;
@@ -43,11 +84,11 @@ export async function fetchOtpCode(
   }
 
   const since = sinceTimestamp ?? new Date(Date.now() - 5 * 60 * 1000);
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
 
   console.log(
     `[otp-reader] Polling for OTP from ${senderAddress} ` +
-    `(timeout ${POLL_TIMEOUT_MS / 1000}s, since ${since.toISOString()})`
+    `(timeout ${timeoutMs / 1000}s, since ${since.toISOString()})`
   );
 
   const client = new ImapFlow({
@@ -62,67 +103,139 @@ export async function fetchOtpCode(
     await client.connect();
     console.log("[otp-reader] IMAP connected");
 
-    let pollCount = 0;
-    while (Date.now() < deadline) {
-      pollCount++;
-      // NOOP forces the server to send any pending EXISTS/RECENT
-      // notifications so we see newly arrived mail on this connection.
-      await client.noop();
-      const lock = await client.getMailboxLock("INBOX");
+    // Gmail puts unfamiliar senders (including State Farm B2B OTPs) in the
+    // Spam folder, which is NOT included in INBOX searches. We poll both.
+    const MAILBOXES_TO_SCAN = ["INBOX", "[Gmail]/Spam"] as const;
+
+    const scanMailbox = async (
+      mailbox: string,
+    ): Promise<{ otpCode: string; matchedUid: number; mailbox: string } | null> => {
+      let lock;
+      try {
+        lock = await client.getMailboxLock(mailbox);
+      } catch (err) {
+        // Mailbox may not exist (e.g. non-Gmail providers). Skip silently.
+        console.log(
+          `[otp-reader]   mailbox ${mailbox} unavailable: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+        return null;
+      }
 
       try {
+        // Gmail's server-side `SEARCH FROM` is unreliable on freshly arrived
+        // mail in long-lived sessions (returns 0 hits even when the message
+        // is in the mailbox). Fetch by `since` only and filter by sender on
+        // the client side.
         const messages = client.fetch(
-          { from: senderAddress, since },
-          { source: true, uid: true }
+          { since },
+          { source: true, uid: true, internalDate: true, envelope: true },
         );
 
         let otpCode: string | null = null;
         let matchedUid: number | null = null;
         let emailCount = 0;
+        let scannedCount = 0;
+
+        const senderMatch = senderAddress.toLowerCase();
 
         for await (const msg of messages) {
+          scannedCount++;
+          const fromAddr = (msg.envelope?.from?.[0]?.address ?? "").toLowerCase();
+          const subject = (msg.envelope?.subject ?? "").toLowerCase();
+          if (!fromAddr.includes(senderMatch) && !subject.includes(senderMatch)) {
+            continue;
+          }
           emailCount++;
+          const internalDate =
+            msg.internalDate instanceof Date
+              ? msg.internalDate
+              : msg.internalDate
+                ? new Date(msg.internalDate)
+                : null;
+          if (internalDate && internalDate.getTime() < since.getTime()) {
+            console.log(
+              `[otp-reader]   ${mailbox} uid=${msg.uid}: stale (internalDate=${internalDate.toISOString()} < since=${since.toISOString()}), deleting`,
+            );
+            try {
+              await client.messageDelete({ uid: msg.uid }, { uid: true });
+            } catch {
+              /* ignore */
+            }
+            continue;
+          }
           if (!msg.source) {
-            console.log(`[otp-reader]   uid=${msg.uid}: no source`);
+            console.log(`[otp-reader]   ${mailbox} uid=${msg.uid}: no source`);
             continue;
           }
           const body = msg.source.toString("utf-8");
+          const extractedCode = extractOtpCodeFromEmail(body, carrierId);
 
-          // Try multiple regex patterns in order of specificity:
-          // 1. HTML-wrapped 6-digit code: >123456<
-          // 2. Near "Verification Code" text
-          // 3. Any 6-digit number in the HTML body (skip MIME headers first)
-          const htmlStart = body.indexOf("<html");
-          const htmlBody = htmlStart >= 0 ? body.substring(htmlStart) : body;
-
-          const match =
-            htmlBody.match(/>\s*(\d{6})\s*</) ??
-            htmlBody.match(/Verification Code[\s\S]{0,80}?(\d{6})/i) ??
-            htmlBody.match(/\b(\d{6})\b/);
-
-          if (match) {
-            otpCode = match[1];
+          if (extractedCode) {
+            otpCode = extractedCode;
             matchedUid = msg.uid;
-            console.log(`[otp-reader]   uid=${msg.uid}: matched code=${otpCode}`);
-            // Don't break — keep scanning to find the newest email (highest UID)
+            console.log(
+              `[otp-reader]   ${mailbox} uid=${msg.uid}: matched code=${otpCode}`,
+            );
           } else {
-            console.log(`[otp-reader]   uid=${msg.uid}: no code found (body ${body.length} bytes)`);
+            console.log(
+              `[otp-reader]   ${mailbox} uid=${msg.uid}: no code found (body ${body.length} bytes)`,
+            );
           }
         }
 
-        console.log(`[otp-reader] Poll #${pollCount}: ${emailCount} emails from sender`);
+        console.log(
+          `[otp-reader] Poll #${pollCount} ${mailbox}: scanned ${scannedCount}, ${emailCount} from sender "${senderAddress}"`,
+        );
 
-        if (otpCode && matchedUid) {
-          // Delete the OTP email to keep inbox clean
-          await client.messageDelete({ uid: matchedUid }, { uid: true });
-          console.log(`[otp-reader] Found OTP code: ${otpCode}, deleted email uid=${matchedUid}`);
-          return otpCode;
+        if (otpCode && matchedUid !== null) {
+          return { otpCode, matchedUid, mailbox };
         }
+        return null;
       } finally {
         lock.release();
       }
+    };
 
-      // Wait before polling again
+    let pollCount = 0;
+    while (Date.now() < deadline) {
+      pollCount++;
+      // Re-select the mailbox each poll so newly arrived messages are visible.
+      // Long-lived Gmail sessions otherwise return stale snapshots.
+      try {
+        await client.mailboxClose();
+      } catch {
+        /* ignore — no mailbox open yet on first iteration */
+      }
+
+      let found: { otpCode: string; matchedUid: number; mailbox: string } | null = null;
+      for (const mailbox of MAILBOXES_TO_SCAN) {
+        found = await scanMailbox(mailbox);
+        if (found) break;
+      }
+
+      if (found) {
+        try {
+          await client.getMailboxLock(found.mailbox).then(async (lock) => {
+            try {
+              await client.messageDelete({ uid: found!.matchedUid }, { uid: true });
+            } finally {
+              lock.release();
+            }
+          });
+        } catch (err) {
+          console.warn(
+            `[otp-reader] Failed to delete OTP email uid=${found.matchedUid} in ${found.mailbox}:`,
+            err instanceof Error ? err.message : err,
+          );
+        }
+        console.log(
+          `[otp-reader] Found OTP code: ${found.otpCode} in ${found.mailbox} (uid=${found.matchedUid})`,
+        );
+        return found.otpCode;
+      }
+
       if (Date.now() + POLL_INTERVAL_MS < deadline) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       }

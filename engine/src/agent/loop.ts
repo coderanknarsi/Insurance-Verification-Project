@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import type { AgentTask, AgentStep } from "./types.js";
+import type { AgentTask, AgentStep, PageElement } from "./types.js";
 import { observe } from "./observer.js";
 import { reason } from "./reasoner.js";
 import { executeAction } from "./actions.js";
@@ -9,8 +9,61 @@ import { fetchOtpCode } from "../email/otp-reader.js";
 
 const MAX_STEPS = 25;
 const MAX_CAPTCHA_RETRIES = 2;
-const MAX_MFA_RETRIES = 2;
-const MAX_CONSECUTIVE_ERRORS = 3;
+const MAX_MFA_RETRIES = 3;
+const MAX_CONSECUTIVE_ERRORS = 5;
+
+export function resolveMfaCarrierId(action: AgentStep["action"], task: AgentTask): string | null {
+  return action.carrierId ?? task.carrierId ?? null;
+}
+
+export function findOtpInputElement(elements: PageElement[]): PageElement | undefined {
+  return elements.find((el) => {
+    if (el.tag !== "input") return false;
+    const text = [el.selector, el.placeholder, el.ariaLabel, el.text]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      el.inputType === "tel" ||
+      text.includes("code") ||
+      text.includes("otp") ||
+      text.includes("otc") ||
+      text.includes("one-time") ||
+      text.includes("onetime") ||
+      text.includes("verification")
+    );
+  });
+}
+
+export function findEmailMfaButton(elements: PageElement[]): PageElement | undefined {
+  return elements.find((el) => {
+    if (el.tag !== "button" && el.tag !== "a") return false;
+    const text = [el.selector, el.ariaLabel, el.text]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return text.includes("email") && (text.includes("code") || text.includes("verify"));
+  });
+}
+
+export function findMfaSubmitButton(elements: PageElement[]): PageElement | undefined {
+  return elements.find((el) => {
+    if (el.tag !== "button" && el.tag !== "a") return false;
+    const text = [el.selector, el.ariaLabel, el.text]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      text.includes("onetimecodeprimarybutton") ||
+      text.includes("verify") ||
+      text.includes("submit") ||
+      text.includes("continue")
+    );
+  });
+}
 
 export interface AgentLoopResult {
   success: boolean;
@@ -96,11 +149,57 @@ export async function agentLoop(
         };
       }
 
-      const carrierId = action.carrierId ?? "progressive";
-      // Use a 5-minute lookback window so we catch OTP emails that arrived
-      // slightly before the agent decided to fetch (PingFederate sends the
-      // OTP during the authenticate call, which happens before this step).
-      const sinceCutoff = new Date(Date.now() - 5 * 60 * 1000);
+      const carrierId = resolveMfaCarrierId(action, task);
+      if (!carrierId) {
+        return {
+          success: false,
+          steps,
+          error: "MFA carrier ID was not provided by the action or task",
+        };
+      }
+      let otpObservation = await observe(page);
+      let otpInput = findOtpInputElement(otpObservation.elements);
+
+      if (!otpInput) {
+        // Detect whether the LLM (or a previous loop iteration) already
+        // clicked an MFA email/verify button in a recent step. Re-clicking
+        // can toggle the selection off or trip the carrier's rate limiter.
+        const recentEmailClick = steps.slice(-3).some((s) => {
+          if (s.action.type !== "CLICK" || !s.action.selector) return false;
+          const sel = s.action.selector.toLowerCase();
+          return (
+            sel.includes("email") ||
+            sel.includes("otc") ||
+            sel.includes("verify") ||
+            sel.includes("data-testid=\"email\"")
+          );
+        });
+
+        const emailMfaButton = findEmailMfaButton(otpObservation.elements);
+        if (emailMfaButton && !recentEmailClick) {
+          console.log(`[agent] Clicking MFA email option ${emailMfaButton.selector}`);
+          await page.click(emailMfaButton.selector, { timeout: 10_000, force: true });
+          await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => {});
+          await page.waitForTimeout(3_000);
+          otpObservation = await observe(page);
+          otpInput = findOtpInputElement(otpObservation.elements);
+        } else if (recentEmailClick) {
+          console.log("[agent] Email MFA button was just clicked; skipping re-click to avoid toggling/rate-limit");
+          await page.waitForTimeout(3_000);
+          otpObservation = await observe(page);
+          otpInput = findOtpInputElement(otpObservation.elements);
+        }
+      }
+
+      if (!otpInput) {
+        console.warn("[agent] OTP input field is not available yet; waiting before retrying MFA fetch");
+        await page.waitForTimeout(2_000);
+        continue;
+      }
+
+      // Tight window: only accept OTPs delivered in the last ~90s so we don't
+      // pick up stale codes left over from previous failed sweeps.
+      const sinceCutoff = new Date(Date.now() - 90_000);
       console.log(`[agent] Fetching MFA code for ${carrierId}...`);
       const otpCode = await fetchOtpCode(carrierId, sinceCutoff);
 
@@ -112,23 +211,18 @@ export async function agentLoop(
         };
       }
 
-      // Find the OTP input field and type the code
-      const otpObservation = await observe(page);
-      const otpInput = otpObservation.elements.find(
-        (el) =>
-          el.tag === "input" &&
-          (el.placeholder?.includes("XXXXXX") ||
-            el.placeholder?.includes("code") ||
-            el.ariaLabel?.toLowerCase().includes("code") ||
-            el.inputType === "text" || el.inputType === "tel")
-      );
-      if (otpInput) {
-        await page.fill(otpInput.selector, "");
-        await page.type(otpInput.selector, otpCode, { delay: 80 });
-        await page.waitForTimeout(500);
-        console.log(`[agent] Typed MFA code into ${otpInput.selector}`);
-      } else {
-        console.warn("[agent] Could not find OTP input field, letting agent retry");
+      await page.fill(otpInput.selector, "");
+      await page.type(otpInput.selector, otpCode, { delay: 80 });
+      await page.waitForTimeout(500);
+      console.log(`[agent] Typed MFA code into ${otpInput.selector}`);
+
+      const submitObservation = await observe(page);
+      const submitButton = findMfaSubmitButton(submitObservation.elements);
+      if (submitButton) {
+        await page.click(submitButton.selector, { timeout: 10_000, force: true });
+        await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => {});
+        await page.waitForTimeout(1_000);
+        console.log(`[agent] Submitted MFA code with ${submitButton.selector}`);
       }
       continue;
     }

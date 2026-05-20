@@ -7,6 +7,7 @@ export type ActionType =
   | "WAIT"
   | "PRESS_KEY"
   | "SCROLL"
+  | "NAVIGATE"
   | "EXTRACT"
   | "DONE"
   | "CAPTCHA_DETECTED"
@@ -37,6 +38,8 @@ export interface AgentAction {
   errorMessage?: string;
   /** Carrier ID for FETCH_MFA_CODE action */
   carrierId?: string;
+  /** Absolute URL to navigate to (for NAVIGATE action) */
+  url?: string;
 }
 
 export interface PageElement {
@@ -72,6 +75,8 @@ export interface AgentObservation {
 }
 
 export interface AgentTask {
+  /** Carrier ID used by carrier-scoped helpers such as MFA email polling */
+  carrierId?: string;
   /** Human-readable description of what the agent should accomplish */
   goal: string;
   /** Carrier-specific context and hints */

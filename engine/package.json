@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "statefarm:sweep": "tsx src/scripts/statefarm-manual-sweep.ts",
     "docker:build": "docker build -t alt-engine .",
     "docker:run": "docker run -p 8080:8080 --env-file .env alt-engine"
   },

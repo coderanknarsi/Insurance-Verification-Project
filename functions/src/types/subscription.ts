@@ -48,24 +48,24 @@ export function getStripePriceId(plan: SubscriptionPlan): string {
 export const PLAN_CONFIG: Record<SubscriptionPlan, PlanConfig> = {
   [SubscriptionPlan.STARTER]: {
     name: "Starter",
-    priceMonthly: 149,
-    maxVehicles: 50,
+    priceMonthly: 49,
+    maxVehicles: 25,
     get stripePriceId() {
       return getStripePriceId(SubscriptionPlan.STARTER);
     },
   },
   [SubscriptionPlan.GROWTH]: {
     name: "Growth",
-    priceMonthly: 349,
-    maxVehicles: 150,
+    priceMonthly: 99,
+    maxVehicles: 75,
     get stripePriceId() {
       return getStripePriceId(SubscriptionPlan.GROWTH);
     },
   },
   [SubscriptionPlan.SCALE]: {
     name: "Scale",
-    priceMonthly: 599,
-    maxVehicles: 300,
+    priceMonthly: 199,
+    maxVehicles: 200,
     get stripePriceId() {
       return getStripePriceId(SubscriptionPlan.SCALE);
     },

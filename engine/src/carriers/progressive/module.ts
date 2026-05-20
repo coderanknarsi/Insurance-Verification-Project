@@ -38,6 +38,7 @@ export class ProgressiveModule implements CarrierModule, DirectSearchCapable {
   buildLoginTasks(credentials: CarrierCredentialPayload): AgentTask[] {
     return [
       {
+        carrierId: this.carrierId,
         goal: `Log into the Progressive PROVE portal. Enter credentials, accept the user agreement, complete 2-step email verification, and reach the "Find a Policy" search page.`,
         context:
           LOGIN_CONTEXT +
@@ -121,7 +122,7 @@ export class ProgressiveModule implements CarrierModule, DirectSearchCapable {
     if (rawData.lienholderName) {
       interestedParties.push({
         name: String(rawData.lienholderName),
-        type: "Lienholder",
+        type: "LIEN_HOLDER",
         address: rawData.lienholderAddress
           ? { addr1: String(rawData.lienholderAddress) }
           : undefined,

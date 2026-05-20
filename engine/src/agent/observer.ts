@@ -1,22 +1,46 @@
 import type { Page } from "playwright";
 import type { AgentObservation, PageElement } from "./types.js";
 
+async function captureScreenshot(page: Page): Promise<Buffer> {
+  const screenshotOptions = {
+    type: "jpeg" as const,
+    quality: 75,
+    fullPage: false,
+  };
+
+  try {
+    return await page.screenshot(screenshotOptions);
+  } catch (err) {
+    console.warn(
+      "[observer] Screenshot capture failed, retrying after page settles:",
+      err instanceof Error ? err.message : err,
+    );
+    await page.waitForLoadState("domcontentloaded", { timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    return page.screenshot(screenshotOptions);
+  }
+}
+
 /**
  * Observes the current page state:
  * 1. Takes a JPEG screenshot (compressed for LLM input)
  * 2. Extracts visible interactive elements with their text/attributes
  */
 export async function observe(page: Page): Promise<AgentObservation> {
+  // Settle any pending navigation before capturing page state.
+  // This prevents both "Protocol error (Page.captureScreenshot)" and
+  // "Execution context was destroyed" errors that occur when the page is
+  // still in the middle of a redirect chain when observe() is called.
+  await page.waitForLoadState("domcontentloaded", { timeout: 5_000 }).catch(() => {});
+
   // Take compressed screenshot
-  const screenshotBuffer = await page.screenshot({
-    type: "jpeg",
-    quality: 75,
-    fullPage: false,
-  });
+  const screenshotBuffer = await captureScreenshot(page);
   const screenshotBase64 = screenshotBuffer.toString("base64");
 
-  // Extract interactive elements from the page
-  const elements = await page.evaluate(() => {
+  // Extract interactive elements from the page. Wrap in retry because the page
+  // may still be navigating (e.g. login redirect chain), which can destroy the
+  // execution context mid-evaluate.
+  const evaluateElements = () => page.evaluate(() => {
     const interactiveSelectors = [
       "input:not([type=hidden])",
       "button",
@@ -89,6 +113,27 @@ export async function observe(page: Page): Promise<AgentObservation> {
 
     return results;
   });
+
+  let elements: Awaited<ReturnType<typeof evaluateElements>>;
+  try {
+    elements = await evaluateElements();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      message.includes("Execution context was destroyed") ||
+      message.includes("frame was detached") ||
+      message.includes("Target closed")
+    ) {
+      console.warn(
+        "[observer] page.evaluate interrupted by navigation, retrying after load",
+      );
+      await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      elements = await evaluateElements();
+    } else {
+      throw err;
+    }
+  }
 
   // Only include visible elements, add index
   const visibleElements: PageElement[] = elements

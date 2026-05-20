@@ -22,22 +22,22 @@ const SHARED_FEATURES = [
 const plans = [
   {
     name: 'Starter',
-    price: 149,
-    vehicles: 50,
-    features: ['Up to 50 vehicles', ...SHARED_FEATURES],
+    price: 49,
+    vehicles: 25,
+    features: ['Up to 25 vehicles', ...SHARED_FEATURES],
   },
   {
     name: 'Growth',
-    price: 349,
-    vehicles: 150,
+    price: 99,
+    vehicles: 75,
     popular: true,
-    features: ['Up to 150 vehicles', ...SHARED_FEATURES],
+    features: ['Up to 75 vehicles', ...SHARED_FEATURES],
   },
   {
     name: 'Scale',
-    price: 599,
-    vehicles: 300,
-    features: ['Up to 300 vehicles', ...SHARED_FEATURES],
+    price: 199,
+    vehicles: 200,
+    features: ['Up to 200 vehicles', ...SHARED_FEATURES],
   },
 ];
 
@@ -86,7 +86,7 @@ export default function Pricing() {
             <span className="font-serif italic text-accent">pricing.</span>
           </h2>
           <p className="text-white/50 mt-4 max-w-lg mx-auto">
-            No per-vehicle fees. No hidden charges. Pick the plan that fits your portfolio.
+            Plans start at $49/month. No per-vehicle fees. No hidden charges.
           </p>
         </div>
 
@@ -145,7 +145,7 @@ export default function Pricing() {
           <div>
             <h3 className="text-lg font-bold text-white">Enterprise</h3>
             <p className="text-sm text-white/50 mt-1">
-              300+ vehicles &middot; Custom pricing &middot; Dedicated onboarding &middot; SLA guarantees
+              200+ vehicles &middot; Custom pricing &middot; Dedicated onboarding &middot; SLA guarantees
             </p>
           </div>
           <a
@@ -157,7 +157,7 @@ export default function Pricing() {
         </div>
 
         <p className="text-center text-xs text-white/30 mt-8">
-          14-day free trial · No credit card required · Cancel anytime
+          14-day free trial · Starts at $49/month · Cancel anytime
         </p>
       </div>
     </section>

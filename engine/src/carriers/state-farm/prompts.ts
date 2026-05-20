@@ -3,7 +3,7 @@
  *
  * Full flow:
  *   Login (b2b-login-app.digital.statefarm.com)
- *   → Email MFA (6-digit code)
+ *   → Email MFA (8-digit code)
  *   → B2B Portal homepage (b2b.statefarm.com)
  *   → Home & Auto Lenders → Insurance Inquiry
  *   → "Insurance Inquiry Tool" button
@@ -12,38 +12,65 @@
  *   → Policy Information page (extract data)
  */
 
-export const LOGIN_CONTEXT = `You are on the State Farm B2B portal login page (b2b-login-app.digital.statefarm.com).
-The page has a "B2B ID" field and a "Password" field, plus a "Log In" button.
+export const LOGIN_CONTEXT = `You are on the State Farm B2B portal login page (apps.b2b.statefarm.com).
+The portal uses a multi-step Okta-style login: first enter your username/email, click Next, then enter your password.
 
 Steps:
-1. Enter the B2B ID in the B2B ID / username field.
-2. Enter the password in the Password field.
-3. Click "Log In".
+1. Wait for the page to fully load (dismiss any loading spinners with WAIT if needed).
+2. Find the username or email input field and type the B2B ID / username into it.
+3. Click the "Next" button (may be labelled "Next" or have id "usernamePrimaryButton").
+4. Wait for the password field to appear, then type the password into it.
+5. Click the "Sign In" or "Log In" button to submit.
 
-After clicking Log In, you will see an EMAIL MFA verification step.
-State Farm sends a 6-digit code to the registered email address.
-When you see the MFA / verification code input field, use the FETCH_MFA_CODE action to retrieve the code automatically, then type it in and submit.
+After signing in, you will see an EMAIL MFA verification step.
+State Farm sends an 8-digit code to the registered email address.
+
+CRITICAL — DO NOT CLICK THE EMAIL BUTTON YOURSELF:
+- As soon as you see a page with an option like "Email code to I**O@A...M" (a verification-method selector), IMMEDIATELY emit FETCH_MFA_CODE with carrierId "state_farm". Do NOT emit a CLICK for the Email button first.
+- The FETCH_MFA_CODE handler will click the Email button, wait for the OTP input, fetch the code from email, type it in, and submit.
+- Clicking the Email button yourself and then emitting FETCH_MFA_CODE causes a double-click that toggles the selection off or trips State Farm's rate limiter — the email will never arrive.
+
+If you instead see the OTP input field directly (no method selector), still just emit FETCH_MFA_CODE — the handler will detect that and skip the click.
+
+SUCCESS CRITERIA — REPORT DONE WHEN:
+- The URL contains "b2b.statefarm.com/b2b-content" OR the page title is "B2B Portal | Home" OR you can see B2B portal navigation menus like "Home & Auto Lenders".
+- As soon as you observe any of the above, emit a DONE action. The login task is complete; the next task will handle navigation.
+- Do NOT emit ERROR just because the current page is the homepage — that means login SUCCEEDED.
 
 IMPORTANT:
 - Do NOT click "Remember this device" if that option appears.
-- If there is a CAPTCHA, solve it before clicking Log In.
-- After MFA, you should land on the B2B portal homepage (b2b.statefarm.com/b2b-content or similar).`;
+- If there is a CAPTCHA, solve it before proceeding.
+- Ignore generic notices on the password page (e.g. "If your last login was before December 2025, your password has expired") — these are informational. Proceed with entering the password unless the page explicitly says THIS account's password is expired.
+- If State Farm prompts for a second MFA round (e.g. "trust this device" verification), use FETCH_MFA_CODE again — the system will retrieve the new code automatically.
+- Use single quotes inside CSS attribute selectors, e.g. input[name='username'] not input[name="username"].`;
 
 export const NAVIGATE_TO_INQUIRY_CONTEXT = `You are logged into the State Farm B2B portal (b2b.statefarm.com).
-You need to navigate to the Insurance Inquiry Tool. Here are the steps:
+You need to reach the Insurance Inquiry Tool's Policy Search page.
 
-1. Find and click the "Home & Auto Lenders" dropdown/menu item in the navigation.
-2. From the dropdown, select "Insurance Inquiry" (or a similarly named option).
-3. You should land on an Insurance Inquiry page with a red/prominent "Insurance Inquiry Tool" button.
-4. Click the "Insurance Inquiry Tool" button.
-5. You should now be on the Policy Search page (URL contains "InsuranceInquiry/policySearch" or similar).
+REQUIRED SEQUENCE (perform each step in order):
 
-If you see a page with search fields (like Full VIN, Policy Number, etc.), you have successfully navigated to the right page — report DONE.
+STEP 1 — Initialize the Lenders service context:
+{"type": "NAVIGATE", "url": "https://b2b.statefarm.com/b2b-content/home-auto-lenders", "reasoning": "Enter the Home & Auto Lenders service context."}
+
+STEP 2 — Open the Insurance Inquiry landing page (do NOT skip step 1 first):
+{"type": "NAVIGATE", "url": "https://b2b.statefarm.com/b2b-content/home-auto-lenders/ins-inquiry", "reasoning": "Open the Insurance Inquiry landing page."}
+
+STEP 3 — Click the prominent red "Insurance Inquiry Tool" button on the landing page. Look for a button or link whose visible text contains "Insurance Inquiry Tool". The button opens the actual tool (URL changes to lenders.apps.*.statefarm.com/InsuranceInquiry/policySearch with a session token — you do NOT need to construct this URL, the click does it for you).
+
+STEP 4 — Wait for the Policy Search page to load (it has fields including "Full VIN").
+
+SUCCESS CRITERIA — REPORT DONE WHEN:
+- The page displays a "Full VIN" input field, OR
+- The URL contains "InsuranceInquiry/policySearch".
+
+RECOVERY:
+- If after STEP 2 the page looks unexpected (e.g. "Claim Services"), DO NOT immediately ERROR. Re-emit STEP 1 (navigate to /home-auto-lenders) then STEP 2 again. The Lenders service context must be initialized before /ins-inquiry resolves correctly.
+- If after several attempts the navigation still fails, try clicking visible links/tiles whose text contains "Insurance Inquiry".
 
 IMPORTANT:
-- The navigation may involve hovering over menus or clicking dropdown items.
-- If you see "Electronic Data Interchange" or other options, ignore them — you want "Insurance Inquiry".
-- Look for buttons, links, or menu items. The portal may use dropdowns, accordion menus, or sidebar navigation.`;
+- Always use NAVIGATE for the first two steps. Do not try to click through menus when a direct URL is available.
+- Ignore unrelated tiles like "Electronic Data Interchange", "Claim Services", "Payments".
+- Use single quotes inside CSS attribute selectors.`;
 
 export const SEARCH_CONTEXT = `You are on the State Farm Insurance Inquiry Policy Search page.
 This page has multiple search options. Use the "Full VIN" field.

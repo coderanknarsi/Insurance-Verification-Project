@@ -45,6 +45,7 @@ export class AllstateModule implements CarrierModule {
   buildLoginTasks(credentials: CarrierCredentialPayload): AgentTask[] {
     return [
       {
+        carrierId: this.carrierId,
         goal: `Navigate to ${this.portalUrl} and log in with the username and password. Complete any MFA/verification step using FETCH_MFA_CODE if prompted.`,
         context:
           LOGIN_CONTEXT +
@@ -139,7 +140,7 @@ export class AllstateModule implements CarrierModule {
     if (rawData.lienholderName) {
       interestedParties.push({
         name: String(rawData.lienholderName),
-        type: "Lienholder",
+        type: "LIEN_HOLDER",
         address: rawData.lienholderAddress
           ? { addr1: String(rawData.lienholderAddress) }
           : undefined,

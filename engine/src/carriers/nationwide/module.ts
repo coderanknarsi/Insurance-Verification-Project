@@ -36,6 +36,7 @@ export class NationwideModule implements CarrierModule {
   buildLoginTasks(credentials: CarrierCredentialPayload): AgentTask[] {
     return [
       {
+        carrierId: this.carrierId,
         goal: `Navigate to ${this.portalUrl} and complete the 2-step Nationwide login with username "${credentials.username}" and password, then complete email-based MFA.`,
         context:
           LOGIN_CONTEXT +
@@ -119,7 +120,7 @@ export class NationwideModule implements CarrierModule {
     if (rawData.lienholderName) {
       interestedParties.push({
         name: String(rawData.lienholderName),
-        type: "Lienholder",
+        type: "LIEN_HOLDER",
         address: rawData.lienholderAddress
           ? { addr1: String(rawData.lienholderAddress) }
           : undefined,

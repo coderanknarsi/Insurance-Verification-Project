@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "AutoLienTracker Helper",
+  "description": "Runs State Farm policy verification sweeps from your admin dashboard.",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AutoLienTracker Helper"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": [
+    "https://*.statefarm.com/*",
+    "https://*.cloudfunctions.net/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.statefarm.com/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://app.autolientracker.com/*",
+      "https://insurance-track-os.web.app/*",
+      "https://insurance-track-os.firebaseapp.com/*",
+      "http://localhost:3000/*",
+      "https://localhost:3000/*"
+    ]
+  }
+}

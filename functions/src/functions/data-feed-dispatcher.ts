@@ -9,6 +9,10 @@ import {
   normalizeCarrier,
   VerificationState,
 } from "../services/verification-eligibility";
+import {
+  summarizeEngineBatchResult,
+  type EngineBatchResultSummary,
+} from "../services/engine-batch-result";
 import type { VerificationBatch, VerificationInput } from "./data-feed-types";
 
 const ENGINE_URL = process.env.DATA_FEED_ENGINE_URL ?? "";
@@ -269,10 +273,13 @@ export async function runSweepForOrg(
     result.policies += inputs.length;
 
     try {
-      await sendBatchToEngine(batch);
-      result.successCount += inputs.length;
+      const batchSummary = await sendBatchToEngine(batch);
+      result.successCount += batchSummary.successCount;
+      result.errorCount += batchSummary.errorCount;
       logger.info(
-        `[data-feed] Dispatched batch ${batchId} — ${inputs.length} policies`,
+        `[data-feed] Dispatched batch ${batchId} — ` +
+          `${batchSummary.successCount} verified, ${batchSummary.errorCount} errors ` +
+          `(${batchSummary.resultCount}/${inputs.length} results)`,
       );
     } catch (err) {
       result.errorCount += inputs.length;
@@ -305,7 +312,7 @@ function currentChicagoWeekday(): 1 | 2 | 3 | 4 | 5 | null {
  * Sends a verification batch to the Cloud Run engine worker.
  * Uses authenticated fetch with Identity Token for Cloud Run.
  */
-async function sendBatchToEngine(batch: VerificationBatch): Promise<void> {
+async function sendBatchToEngine(batch: VerificationBatch): Promise<EngineBatchResultSummary> {
   const auth = new GoogleAuth();
   const client = await auth.getIdTokenClient(ENGINE_URL);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -325,4 +332,6 @@ async function sendBatchToEngine(batch: VerificationBatch): Promise<void> {
       `Engine returned ${response.status}: ${JSON.stringify(response.data)}`,
     );
   }
+
+  return summarizeEngineBatchResult(response.data, batch.policies.length);
 }

@@ -1,6 +1,8 @@
 import { httpsCallable } from "firebase/functions";
 import { getClientFunctions } from "./firebase";
 
+const LONG_RUNNING_CALLABLE_TIMEOUT_MS = 540_000;
+
 // ---- Types for Cloud Function inputs/outputs ----
 
 interface GetDashboardSummaryInput {
@@ -797,7 +799,44 @@ export interface SimulateVerificationSweepResult {
 export function callSimulateVerificationSweep(data: { orgId: string; persistRun?: boolean }) {
   return httpsCallable<typeof data, SimulateVerificationSweepResult>(
     getClientFunctions(),
-    "simulateVerificationSweep"
+    "simulateVerificationSweep",
+    { timeout: LONG_RUNNING_CALLABLE_TIMEOUT_MS }
+  )(data);
+}
+
+// ---- State Farm manual sweep (browser-extension driven) ----
+
+export interface StateFarmSweepPolicyInput {
+  policyId: string;
+  organizationId: string;
+  borrowerId: string;
+  vehicleId: string;
+  vin: string;
+  borrowerLastName: string;
+  borrowerFirstName?: string;
+  policyNumber?: string;
+  insuranceProvider?: string;
+}
+
+export interface StartStateFarmSweepResult {
+  runId: string;
+  policies: StateFarmSweepPolicyInput[];
+}
+
+export function callStartStateFarmSweep(data: { organizationId: string }) {
+  return httpsCallable<typeof data, StartStateFarmSweepResult>(
+    getClientFunctions(),
+    "startStateFarmSweep"
+  )(data);
+}
+
+export function callFinalizeStateFarmSweep(data: {
+  runId: string;
+  status?: "completed" | "failed" | "cancelled";
+}) {
+  return httpsCallable<typeof data, { ok: boolean }>(
+    getClientFunctions(),
+    "finalizeStateFarmSweep"
   )(data);
 }
 

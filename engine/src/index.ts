@@ -121,6 +121,8 @@ app.post("/verify", requireSharedSecret, async (req, res) => {
           }
         }
 
+        await carrierModule.prepareSearch?.(session.page, policy);
+
         // Run search + extraction tasks
         const searchTasks = carrierModule.buildSearchTasks(policy);
         let finalData: Record<string, unknown> = {};
@@ -235,6 +237,17 @@ if (!IS_PRODUCTION) {
       }
     }
     console.log(`[verify-test] Logged into ${carrierModule.carrierName}`);
+
+    await carrierModule.prepareSearch?.(session.page, {
+      policyId: "test",
+      organizationId: "test",
+      borrowerId: "test",
+      vehicleId: "test",
+      vin,
+      borrowerLastName: "test",
+      policyNumber,
+      insuranceProvider: carrier,
+    });
 
     // Search
     const searchTasks = carrierModule.buildSearchTasks({

@@ -21,6 +21,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StateFarmSweepDialog } from "@/components/state-farm-sweep-dialog";
 import {
   Table,
   TableBody,
@@ -91,6 +92,27 @@ const DASHBOARD_STATUS_COLORS: Record<string, string> = {
   RED: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
+function getSweepResultBanner(result: SimulateVerificationSweepResult) {
+  if (result.errorCount > 0 && result.successCount === 0) {
+    return {
+      label: "Sweep finished with errors",
+      className: "bg-red-500/10 text-red-400 border border-red-500/20",
+    };
+  }
+
+  if (result.errorCount > 0) {
+    return {
+      label: "Sweep partially completed",
+      className: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
+    };
+  }
+
+  return {
+    label: "Sweep completed",
+    className: "bg-green-500/10 text-green-400 border border-green-500/20",
+  };
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [data, setData] = useState<AdminDashboardData | null>(null);
@@ -111,6 +133,7 @@ export default function AdminDashboard() {
   const [deleting, setDeleting] = useState(false);
   const [simulatingOrgId, setSimulatingOrgId] = useState<string | null>(null);
   const [sweepResult, setSweepResult] = useState<SimulateVerificationSweepResult | null>(null);
+  const [stateFarmTarget, setStateFarmTarget] = useState<{ id: string; name: string } | null>(null);
 
   const handleDeleteOrg = async () => {
     if (!deleteTarget || deleteConfirmText !== deleteTarget.name) return;
@@ -282,11 +305,14 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {sweepResult && (
-          <div className="bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg p-4 text-sm">
-            Sweep completed for <strong>{sweepResult.orgId}</strong>: {sweepResult.successCount} verified, {sweepResult.errorCount} errors, {sweepResult.policies} policies scanned in {Math.round(sweepResult.durationMs / 1000)}s.
-          </div>
-        )}
+        {sweepResult && (() => {
+          const banner = getSweepResultBanner(sweepResult);
+          return (
+            <div className={`${banner.className} rounded-lg p-4 text-sm`}>
+              {banner.label} for <strong>{sweepResult.orgId}</strong>: {sweepResult.successCount} verified, {sweepResult.errorCount} errors, {sweepResult.policies} policies scanned in {Math.round(sweepResult.durationMs / 1000)}s.
+            </div>
+          );
+        })()}
 
         {loading && !data ? (
           <div className="flex items-center justify-center py-20">
@@ -441,6 +467,16 @@ export default function AdminDashboard() {
                                           )}
                                         </Button>
                                         <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setStateFarmTarget({ id: org.id, name: org.name });
+                                          }}
+                                        >
+                                          State Farm
+                                        </Button>
+                                        <Button
                                           variant="ghost"
                                           size="icon"
                                           className="h-8 w-8 text-muted-foreground hover:text-red-500"
@@ -519,6 +555,20 @@ export default function AdminDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {stateFarmTarget && (
+          <StateFarmSweepDialog
+            orgId={stateFarmTarget.id}
+            orgName={stateFarmTarget.name}
+            open={!!stateFarmTarget}
+            onOpenChange={(o) => {
+              if (!o) setStateFarmTarget(null);
+            }}
+            onCompleted={() => {
+              void fetchData();
+            }}
+          />
+        )}
       </main>
     </div>
   );
@@ -890,6 +940,7 @@ function CarriersTab() {
 
   // Form state
   const [carrierId, setCarrierId] = useState("");
+  const [editMode, setEditMode] = useState(false); // true = updating existing credential
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -919,11 +970,11 @@ function CarriersTab() {
       setError("All fields are required.");
       return;
     }
-    const carrier = SUPPORTED_CARRIERS.find((c) => c.id === carrierId);
-    if (!carrier) {
-      setError("Invalid carrier selected.");
-      return;
-    }
+    // Look up across ALL carriers, not just unconfigured ones (edit mode re-uses existing ID)
+    const carrier = SUPPORTED_CARRIERS.find((c) => c.id === carrierId) ?? {
+      id: carrierId,
+      name: credentials.find((c) => c.carrierId === carrierId)?.carrierName ?? carrierId,
+    };
 
     setSaving(true);
     setError(null);
@@ -935,8 +986,9 @@ function CarriersTab() {
         username,
         password,
       });
-      setSuccess(`${carrier.name} credentials saved successfully.`);
+      setSuccess(`${carrier.name} credentials ${editMode ? "updated" : "saved"} successfully.`);
       setShowForm(false);
+      setEditMode(false);
       setCarrierId("");
       setUsername("");
       setPassword("");
@@ -998,23 +1050,35 @@ function CarriersTab() {
       {showForm && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Add Carrier Credentials</CardTitle>
+            <CardTitle className="text-base">
+              {editMode
+                ? `Update ${SUPPORTED_CARRIERS.find((c) => c.id === carrierId)?.name ?? credentials.find((c) => c.carrierId === carrierId)?.carrierName ?? carrierId} Credentials`
+                : "Add Carrier Credentials"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="carrier-select">Carrier</Label>
-              <Select value={carrierId} onValueChange={setCarrierId}>
-                <SelectTrigger id="carrier-select">
-                  <SelectValue placeholder="Select a carrier..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCarriers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Carrier</Label>
+              {editMode ? (
+                <p className="text-sm font-medium py-2">
+                  {SUPPORTED_CARRIERS.find((c) => c.id === carrierId)?.name ??
+                    credentials.find((c) => c.carrierId === carrierId)?.carrierName ??
+                    carrierId}
+                </p>
+              ) : (
+                <Select value={carrierId} onValueChange={setCarrierId}>
+                  <SelectTrigger id="carrier-select">
+                    <SelectValue placeholder="Select a carrier..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableCarriers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="cred-username">Portal Username</Label>
@@ -1049,12 +1113,13 @@ function CarriersTab() {
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSave} disabled={saving}>
                 {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                Save Credentials
+                {editMode ? "Update Credentials" : "Save Credentials"}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => {
                   setShowForm(false);
+                  setEditMode(false);
                   setCarrierId("");
                   setUsername("");
                   setPassword("");
@@ -1150,11 +1215,12 @@ function CarriersTab() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              const carrier = SUPPORTED_CARRIERS.find((c) => c.id === cred.carrierId);
-                              if (carrier) {
-                                setCarrierId(carrier.id);
-                                setShowForm(true);
-                              }
+                              setCarrierId(cred.carrierId);
+                              setUsername("");
+                              setPassword("");
+                              setEditMode(true);
+                              setShowForm(true);
+                              setError(null);
                             }}
                           >
                             Update

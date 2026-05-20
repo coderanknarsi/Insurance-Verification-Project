@@ -45,6 +45,13 @@ export async function executeAction(page: Page, action: AgentAction): Promise<vo
       await page.waitForTimeout(action.waitMs ?? 2000);
       break;
 
+    case "NAVIGATE":
+      if (!action.url) throw new Error("NAVIGATE action missing url");
+      await page.goto(action.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+      await page.waitForTimeout(2_000);
+      break;
+
     case "DONE":
     case "EXTRACT":
     case "CAPTCHA_DETECTED":

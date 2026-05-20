@@ -25,7 +25,7 @@ import {
 export class StateFarmModule implements CarrierModule {
   carrierId = "state_farm";
   carrierName = "State Farm";
-  portalUrl = "https://b2b-login-app.digital.statefarm.com/UI/Login";
+  portalUrl = "https://apps.b2b.statefarm.com/login";
 
   requiredInputs: InputField[] = [
     {
@@ -38,7 +38,8 @@ export class StateFarmModule implements CarrierModule {
   buildLoginTasks(credentials: CarrierCredentialPayload): AgentTask[] {
     return [
       {
-        goal: `Navigate to ${this.portalUrl} and log in with the B2B ID and password. Complete the email MFA verification step using FETCH_MFA_CODE when prompted for a verification code.`,
+        carrierId: this.carrierId,
+        goal: `Navigate to ${this.portalUrl} and log in with the B2B ID and password. Complete the email MFA verification step using FETCH_MFA_CODE with carrierId "state_farm" when prompted for a verification code.`,
         context:
           LOGIN_CONTEXT +
           `\n\nB2B ID: ${credentials.username}\nPassword: ${credentials.password}`,
@@ -52,15 +53,6 @@ export class StateFarmModule implements CarrierModule {
 
   buildSearchTasks(input: VerificationInput): AgentTask[] {
     const tasks: AgentTask[] = [
-      {
-        goal: `Search for a vehicle using the Full VIN field with VIN "${input.vin}".`,
-        context:
-          SEARCH_CONTEXT +
-          `\n\nFull VIN: ${input.vin}` +
-          (input.borrowerLastName
-            ? `\nBorrower Last Name: ${input.borrowerLastName}`
-            : ""),
-      },
       {
         goal: `If you are on an Auto Selection page with multiple vehicles, select the correct one. If you are already on the Policy Information page, report DONE immediately.`,
         context:
@@ -77,6 +69,38 @@ export class StateFarmModule implements CarrierModule {
       },
     ];
     return tasks;
+  }
+
+  async prepareSearch(page: Page, input: VerificationInput): Promise<void> {
+    if (!page.url().includes("InsuranceInquiry/policySearch")) return;
+
+    const vinInput = page.locator("#vinID").first();
+    const searchButton = page.locator("#atpSearchButtonID").first();
+    await vinInput.waitFor({ state: "visible", timeout: 15_000 });
+    await searchButton.waitFor({ state: "visible", timeout: 15_000 });
+
+    console.log(`[state-farm] Submitting Full VIN search for ${input.vin}`);
+    await fillStateFarmVin(page, input.vin);
+    await submitStateFarmSearch(page, "click");
+
+    if (await isStillOnStateFarmSearchForm(page)) {
+      console.warn("[state-farm] Search form still visible after button click; retrying with JS click + Enter");
+      await fillStateFarmVin(page, input.vin);
+      await submitStateFarmSearch(page, "js-click");
+    }
+
+    if (await isStillOnStateFarmSearchForm(page)) {
+      await fillStateFarmVin(page, input.vin);
+      await submitStateFarmSearch(page, "enter");
+    }
+
+    if (await hasNoStateFarmSearchResults(page)) {
+      throw new Error(`State Farm returned no policy results for VIN ${input.vin}`);
+    }
+
+    if (await isStillOnStateFarmSearchForm(page)) {
+      throw new Error("State Farm VIN search did not leave the Policy Search form after submit attempts");
+    }
   }
 
   async isSessionActive(page: Page): Promise<boolean> {
@@ -143,7 +167,7 @@ export class StateFarmModule implements CarrierModule {
     if (rawData.lienholderName) {
       interestedParties.push({
         name: String(rawData.lienholderName),
-        type: "Lienholder",
+        type: "LIEN_HOLDER",
         address: rawData.lienholderAddress
           ? { addr1: String(rawData.lienholderAddress) }
           : undefined,
@@ -186,6 +210,48 @@ export class StateFarmModule implements CarrierModule {
       durationMs: 0, // filled by caller
     };
   }
+}
+
+async function fillStateFarmVin(page: Page, vin: string): Promise<void> {
+  const vinInput = page.locator("#vinID").first();
+  await vinInput.click({ timeout: 10_000 });
+  await vinInput.fill("");
+  await vinInput.type(vin, { delay: 35 });
+  await vinInput.evaluate((el) => {
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    (el as HTMLInputElement).blur();
+  });
+  await page.waitForTimeout(500);
+}
+
+async function submitStateFarmSearch(
+  page: Page,
+  mode: "click" | "js-click" | "enter"
+): Promise<void> {
+  const searchButton = page.locator("#atpSearchButtonID").first();
+  if (mode === "click") {
+    await searchButton.click({ timeout: 10_000, force: true });
+  } else if (mode === "js-click") {
+    await searchButton.evaluate((el) => (el as HTMLElement).click());
+  } else {
+    await page.locator("#vinID").first().focus();
+    await page.keyboard.press("Enter");
+  }
+
+  await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
+  await page.waitForTimeout(3_000);
+}
+
+async function isStillOnStateFarmSearchForm(page: Page): Promise<boolean> {
+  if (!page.url().includes("InsuranceInquiry/policySearch")) return false;
+  return page.locator("#vinID").first().isVisible({ timeout: 1_000 }).catch(() => false);
+}
+
+async function hasNoStateFarmSearchResults(page: Page): Promise<boolean> {
+  const bodyText = await page.locator("body").innerText({ timeout: 3_000 }).catch(() => "");
+  return /no\s+(results|records|polic(?:y|ies))|not\s+found|unable\s+to\s+locate/i.test(bodyText);
 }
 
 function mapPolicyStatus(raw: string | undefined): PolicyStatus {

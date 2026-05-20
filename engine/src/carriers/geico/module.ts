@@ -37,6 +37,7 @@ export class GeicoModule implements CarrierModule {
   buildLoginTasks(credentials: CarrierCredentialPayload): AgentTask[] {
     return [
       {
+        carrierId: this.carrierId,
         goal: `Navigate to ${this.portalUrl} and log in to the GEICO B2B portal with User ID "${credentials.username}" and password. Accept the Terms of Use if prompted.`,
         context:
           LOGIN_CONTEXT +
@@ -115,7 +116,7 @@ export class GeicoModule implements CarrierModule {
     if (rawData.lienholderName) {
       interestedParties.push({
         name: String(rawData.lienholderName),
-        type: "Lienholder",
+        type: "LIEN_HOLDER",
         address: rawData.lienholderAddress
           ? { addr1: String(rawData.lienholderAddress) }
           : undefined,

@@ -85,3 +85,18 @@ export function requireSuperAdmin(request: CallableRequest): void {
     throw new HttpsError("permission-denied", "Super admin access required.");
   }
 }
+
+/**
+ * Returns true if the caller's email is in the SUPER_ADMIN_EMAILS env var.
+ * Non-throwing variant of {@link requireSuperAdmin}.
+ */
+export function isSuperAdmin(request: CallableRequest): boolean {
+  const email = request.auth?.token.email;
+  if (!email) return false;
+  const allowed = superAdminEmails
+    .value()
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return allowed.includes(email.toLowerCase());
+}
