@@ -71,9 +71,34 @@ function fillAndSubmit(vin) {
   return { ok: true };
 }
 
+function findSelectableRows() {
+  // Look for any <tr> that contains something clickable in its first cell.
+  const trs = $$("tr");
+  const rows = [];
+  for (const tr of trs) {
+    if (tr.querySelector("th")) continue; // skip header
+    const firstCell = tr.querySelector("td");
+    if (!firstCell) continue;
+    const selector =
+      firstCell.querySelector("input[type=radio]") ||
+      firstCell.querySelector("[role=radio]") ||
+      firstCell.querySelector("button") ||
+      firstCell.querySelector("input[type=checkbox]") ||
+      firstCell.querySelector("a") ||
+      firstCell.querySelector("label") ||
+      firstCell.querySelector("span,div"); // last-resort: any visible widget
+    if (selector) rows.push({ tr, selector });
+  }
+  return rows;
+}
+
 function pickAutoSelection(lastName, policyNumber) {
-  const rows = $$("tr").filter((tr) => $("input[type=radio]", tr));
-  if (rows.length === 0) return { ok: false, error: "No selectable rows on Auto Selection page" };
+  const rows = findSelectableRows();
+  if (rows.length === 0) {
+    // Dump a snippet of the auto-selection table so we can fix selectors.
+    const tableHtml = (document.querySelector("table")?.outerHTML ?? "(no table)").slice(0, 2000);
+    return { ok: false, error: "No selectable rows on Auto Selection page", debugTable: tableHtml };
+  }
 
   let target = null;
   let pickedBy = "first";
@@ -81,13 +106,13 @@ function pickAutoSelection(lastName, policyNumber) {
   if (policyNumber) {
     const digits = String(policyNumber).replace(/\D/g, "");
     if (digits) {
-      target = rows.find((tr) => tr.innerText.replace(/\D/g, "").includes(digits)) || null;
+      target = rows.find(({ tr }) => tr.innerText.replace(/\D/g, "").includes(digits)) || null;
       if (target) pickedBy = "policy-number";
     }
   }
   if (!target && lastName) {
     const lower = String(lastName).trim().toLowerCase();
-    const matches = rows.filter((tr) => tr.innerText.toLowerCase().includes(lower));
+    const matches = rows.filter(({ tr }) => tr.innerText.toLowerCase().includes(lower));
     if (matches.length === 1) {
       target = matches[0];
       pickedBy = "last-name";
@@ -95,9 +120,13 @@ function pickAutoSelection(lastName, policyNumber) {
   }
   if (!target) target = rows[0];
 
-  const radio = $("input[type=radio]", target);
-  if (!radio) return { ok: false, error: "Selected row has no radio button" };
-  radio.click();
+  // Click selector; for label, also click any matched-for input.
+  const sel = target.selector;
+  // Some custom widgets need a click on a different element — try the input
+  // inside the row first, then the visible selector.
+  const realInput = target.tr.querySelector("input[type=radio], input[type=checkbox]");
+  if (realInput) realInput.click();
+  sel.click();
 
   const continueBtn =
     $$("button, input[type=submit], input[type=button]").find((b) => {
@@ -107,8 +136,13 @@ function pickAutoSelection(lastName, policyNumber) {
   if (!continueBtn) {
     return { ok: false, error: "Continue button not found on Auto Selection page" };
   }
-  setTimeout(() => continueBtn.click(), 50);
-  return { ok: true, picked: pickedBy, rowText: target.innerText.replace(/\s+/g, " ").trim() };
+  setTimeout(() => continueBtn.click(), 100);
+  return {
+    ok: true,
+    picked: pickedBy,
+    rowText: target.tr.innerText.replace(/\s+/g, " ").trim(),
+    selectorTag: sel.tagName,
+  };
 }
 
 function getTextAfterLabel(labelRegex) {

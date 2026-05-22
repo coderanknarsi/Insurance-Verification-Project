@@ -155,8 +155,13 @@ async function verifyOnePolicy(tabId, policy) {
       lastName: policy.borrowerLastName,
       policyNumber: policy.policyNumber,
     });
-    if (!pick?.ok) throw new Error(pick?.error || "PICK_AUTO_SELECTION failed");
-    console.log(`[alt-helper] picked auto-selection row by ${pick.picked}: ${pick.rowText}`);
+    if (!pick?.ok) {
+      if (pick?.debugTable) {
+        console.warn("[alt-helper] auto-selection table HTML:", pick.debugTable);
+      }
+      throw new Error(pick?.error || "PICK_AUTO_SELECTION failed");
+    }
+    console.log(`[alt-helper] picked auto-selection row by ${pick.picked} (selector=${pick.selectorTag}): ${pick.rowText}`);
     await waitForTabComplete(tabId).catch(() => {});
     state = await probeStateWithRetry(tabId, ["policy-info", "no-results"], 20_000);
     if (state.state === "no-results") {
