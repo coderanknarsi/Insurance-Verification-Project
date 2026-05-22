@@ -10,7 +10,8 @@
  * Message types:
  *   - PROBE_STATE         → { state: "search"|"auto-selection"|"policy-info"|"no-results"|"unknown", url }
  *   - FILL_AND_SUBMIT     → { ok, error? }   (clicks Search; navigation follows)
- *   - PICK_AUTO_SELECTION → { ok, picked?, rowText?, error? }
+ *   - PICK_AUTO_SELECTION → { ok, picked?, rowText?, checked?, error? }
+ *   - CONTINUE_AUTO_SELECTION → { ok, error? }   (clicks Continue; navigation follows)
  *   - SCRAPE              → { ok, scraped?, error? }
  *   - BACK_TO_SEARCH      → { ok }   (navigates back)
  */
@@ -26,6 +27,18 @@ function setNativeValue(el, value) {
   else el.value = value;
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function humanClick(el) {
+  const opts = { bubbles: true, cancelable: true, view: window };
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+    try {
+      const EventCtor = type.startsWith("pointer") ? PointerEvent : MouseEvent;
+      el.dispatchEvent(new EventCtor(type, opts));
+    } catch {
+      el.dispatchEvent(new MouseEvent(type, opts));
+    }
+  }
 }
 
 function isOnSearchPage() {
@@ -136,14 +149,34 @@ function pickAutoSelection(lastName, policyNumber) {
   }
   if (!target) target = rows[0];
 
-  // Click selector; for label, also click any matched-for input.
+  // Select only. Background sends CONTINUE_AUTO_SELECTION after a short delay
+  // so State Farm has time to register the selected radio in its form state.
   const sel = target.selector;
-  // Some custom widgets need a click on a different element — try the input
-  // inside the row first, then the visible selector.
   const realInput = target.tr.querySelector("input[type=radio], input[type=checkbox]");
-  if (realInput) realInput.click();
-  sel.click();
+  if (realInput && "checked" in realInput) {
+    humanClick(realInput);
+    realInput.checked = true;
+    realInput.dispatchEvent(new Event("input", { bubbles: true }));
+    realInput.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  humanClick(sel);
+  if ("checked" in sel) {
+    sel.checked = true;
+    sel.dispatchEvent(new Event("input", { bubbles: true }));
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
 
+  const checked = !!($$("input[type=radio]").find((radio) => radio.checked));
+  return {
+    ok: true,
+    picked: pickedBy,
+    rowText: target.tr.innerText.replace(/\s+/g, " ").trim(),
+    selectorTag: sel.tagName,
+    checked,
+  };
+}
+
+function continueAutoSelection() {
   const continueBtn =
     $$("button, input[type=submit], input[type=button]").find((b) => {
       const t = (b.innerText || b.value || "").trim();
@@ -152,13 +185,8 @@ function pickAutoSelection(lastName, policyNumber) {
   if (!continueBtn) {
     return { ok: false, error: "Continue button not found on Auto Selection page" };
   }
-  setTimeout(() => continueBtn.click(), 100);
-  return {
-    ok: true,
-    picked: pickedBy,
-    rowText: target.tr.innerText.replace(/\s+/g, " ").trim(),
-    selectorTag: sel.tagName,
-  };
+  setTimeout(() => humanClick(continueBtn), 50);
+  return { ok: true };
 }
 
 function getTextAfterLabel(labelRegex) {
@@ -256,6 +284,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return false;
       case "PICK_AUTO_SELECTION":
         sendResponse(pickAutoSelection(message.lastName, message.policyNumber));
+        return false;
+      case "CONTINUE_AUTO_SELECTION":
+        sendResponse(continueAutoSelection());
         return false;
       case "SCRAPE":
         if (!isOnPolicyInfoPage()) {
