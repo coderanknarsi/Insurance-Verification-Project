@@ -39,9 +39,7 @@ function isOnPolicyInfoPage() {
 
 function isOnAutoSelection() {
   const txt = document.body?.innerText ?? "";
-  if (!/Auto\s+Selection/i.test(txt)) return false;
-  const radios = $$("input[type=radio]");
-  return radios.length >= 1;
+  return /Auto\s+Selection/i.test(txt) && /click\s+Continue/i.test(txt);
 }
 
 function hasNoResultsMessage() {
@@ -72,6 +70,24 @@ function fillAndSubmit(vin) {
 }
 
 function findSelectableRows() {
+  // State Farm renders this screen differently by environment: sometimes a
+  // real table, sometimes div/grid markup with radio inputs outside any <tr>.
+  const directRadios = $$("input[type=radio], [role=radio]").filter((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+  if (directRadios.length > 0) {
+    return directRadios.map((selector) => {
+      let container = selector.parentElement || selector;
+      for (let depth = 0; container?.parentElement && depth < 8; depth += 1) {
+        const text = (container.innerText || container.textContent || "").trim();
+        if (/\b\d{5,}\b/.test(text) || /\b[A-Z]{2}\b/.test(text)) break;
+        container = container.parentElement;
+      }
+      return { tr: container || selector, selector };
+    });
+  }
+
   // Look for any <tr> that contains something clickable in its first cell.
   const trs = $$("tr");
   const rows = [];
