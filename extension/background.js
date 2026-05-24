@@ -160,17 +160,24 @@ async function verifyOnePolicy(tabId, policy) {
       policyNumber: policy.policyNumber,
     });
     if (!pick?.ok) {
-      if (pick?.debugTable) {
-        console.warn("[alt-helper] auto-selection table HTML:", pick.debugTable);
-      }
+      if (pick?.debugTable) console.warn("[alt-helper] auto-selection debug:", pick.debugTable);
+      if (pick?.radios) console.warn("[alt-helper] auto-selection radios:", pick.radios);
       throw new Error(pick?.error || "PICK_AUTO_SELECTION failed");
     }
     console.log(
       `[alt-helper] picked auto-selection row by ${pick.picked} (selector=${pick.selectorTag}, checked=${pick.checked}): ${pick.rowText}`,
     );
+    if (!pick.checked) {
+      console.warn("[alt-helper] auto-selection radios after pick:", pick.radios);
+      throw new Error("Auto Selection row was clicked, but no policy radio became checked; refusing to submit.");
+    }
     await sleep(900);
     const cont = await sendToTab(tabId, { type: "CONTINUE_AUTO_SELECTION" });
-    if (!cont?.ok) throw new Error(cont?.error || "CONTINUE_AUTO_SELECTION failed");
+    if (!cont?.ok) {
+      if (cont?.radios) console.warn("[alt-helper] auto-selection radios before Continue:", cont.radios);
+      throw new Error(cont?.error || "CONTINUE_AUTO_SELECTION failed");
+    }
+    console.log("[alt-helper] auto-selection continue submitted:", cont);
     await waitForTabComplete(tabId).catch(() => {});
     state = await probeStateWithRetry(tabId, ["policy-info", "no-results"], 20_000);
     if (state.state === "no-results") {
