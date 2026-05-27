@@ -1,0 +1,41 @@
+{
+  "name": "autolien-operator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop app that drives carrier verification sweeps via Playwright on the user's machine.",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "start": "electron .",
+    "dev": "npm run build && electron .",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "firebase": "^10.13.0",
+    "keytar": "^7.9.0",
+    "playwright-core": "^1.45.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "rimraf": "^5.0.7",
+    "typescript": "^5.5.0"
+  },
+  "build": {
+    "appId": "com.autolientracker.operator",
+    "productName": "AutoLien Operator",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["nsis"]
+    }
+  }
+}

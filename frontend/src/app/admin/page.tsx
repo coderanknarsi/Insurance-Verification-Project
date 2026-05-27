@@ -72,7 +72,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-type Tab = "overview" | "revenue" | "carriers";
+type Tab = "overview" | "revenue" | "carriers" | "sweeps";
 type SortField = "name" | "plan" | "subscriptionStatus" | "borrowerCount" | "userCount" | "createdAt";
 type SortDir = "asc" | "desc";
 
@@ -281,6 +281,7 @@ export default function AdminDashboard() {
             { id: "overview" as Tab, label: "Overview", icon: Building2 },
             { id: "revenue" as Tab, label: "Revenue & Usage", icon: TrendingUp },
             { id: "carriers" as Tab, label: "Carrier Credentials", icon: ShieldCheck },
+            { id: "sweeps" as Tab, label: "Verification Sweeps", icon: RefreshCw },
           ]).map((tab) => (
             <button
               key={tab.id}
@@ -521,6 +522,10 @@ export default function AdminDashboard() {
             {activeTab === "carriers" && (
               <CarriersTab />
             )}
+
+            {activeTab === "sweeps" && (
+              <SweepsTab />
+            )}
           </>
         ) : null}
 
@@ -739,6 +744,54 @@ function OrgDetailPanel({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ─── Verification Sweeps Tab ───────────────────────────────── */
+
+function SweepsTab() {
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5 text-accent" />
+            Verification Sweeps
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <p className="text-muted-foreground">
+            This section runs carrier verification sweeps through the AutoLien Operator desktop app
+            on your machine. Phase 0 scaffold — UI lands in Phase 5.
+          </p>
+
+          <div className="rounded-lg border border-border bg-card/50 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">Phase 0</Badge>
+              <span className="text-muted-foreground">Spec + scaffold committed.</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Design doc: <code>docs/superpowers/specs/2026-05-27-autolien-operator-design.md</code>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Operator workspace: <code>operator/</code>
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card/50 p-4 space-y-2">
+            <div className="text-sm font-medium">Carriers</div>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li>• State Farm — in progress (Phase 4)</li>
+              <li>• Progressive — pending</li>
+              <li>• Allstate — pending</li>
+              <li>• National General — pending</li>
+              <li>• GEICO — pending</li>
+              <li>• Nationwide — pending</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
