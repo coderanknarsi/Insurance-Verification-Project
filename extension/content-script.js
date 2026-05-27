@@ -10,8 +10,7 @@
  * Message types:
  *   - PROBE_STATE         → { state: "search"|"auto-selection"|"policy-info"|"no-results"|"unknown", url }
  *   - FILL_AND_SUBMIT     → { ok, error? }   (clicks Search; navigation follows)
- *   - PICK_AUTO_SELECTION → { ok, picked?, rowText?, checked?, error? }
- *   - CONTINUE_AUTO_SELECTION → { ok, error? }   (clicks Continue; navigation follows)
+ *   - PICK_AUTO_SELECTION → { ok, picked?, rowText?, error? }
  *   - SCRAPE              → { ok, scraped?, error? }
  *   - BACK_TO_SEARCH      → { ok }   (navigates back)
  */
@@ -29,20 +28,6 @@ function setNativeValue(el, value) {
   el.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function humanClick(el) {
-  if (!el) return;
-  if (typeof el.click === "function") el.click();
-  const opts = { bubbles: true, cancelable: true, view: window };
-  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-    try {
-      const EventCtor = type.startsWith("pointer") ? PointerEvent : MouseEvent;
-      el.dispatchEvent(new EventCtor(type, opts));
-    } catch {
-      el.dispatchEvent(new MouseEvent(type, opts));
-    }
-  }
-}
-
 function isOnSearchPage() {
   return location.href.includes(POLICY_SEARCH_FRAGMENT) && !!$("#vinID");
 }
@@ -54,7 +39,9 @@ function isOnPolicyInfoPage() {
 
 function isOnAutoSelection() {
   const txt = document.body?.innerText ?? "";
-  return /Auto\s+Selection/i.test(txt) && /click\s+Continue/i.test(txt);
+  if (!/Auto\s+Selection/i.test(txt)) return false;
+  const radios = $$("input[type=radio]");
+  return radios.length >= 1;
 }
 
 function hasNoResultsMessage() {
@@ -84,71 +71,9 @@ function fillAndSubmit(vin) {
   return { ok: true };
 }
 
-function radioSummaries() {
-  return $$("input[type=radio]").map((radio, index) => ({
-    index,
-    id: radio.id || "",
-    name: radio.name || "",
-    value: String(radio.value ?? ""),
-    checked: !!radio.checked,
-    html: String(radio.outerHTML ?? "").slice(0, 400),
-  }));
-}
-
-function findCheckedRadio() {
-  return $$("input[type=radio]").find((radio) => radio.checked) || null;
-}
-
-function findSelectableRows() {
-  // State Farm renders this screen differently by environment: sometimes a
-  // real table, sometimes div/grid markup with radio inputs outside any <tr>.
-  const directRadios = $$("input[type=radio], [role=radio]").filter((el) => {
-    const rect = typeof el.getBoundingClientRect === "function"
-      ? el.getBoundingClientRect()
-      : { width: 1, height: 1 };
-    return rect.width > 0 && rect.height > 0;
-  });
-  if (directRadios.length > 0) {
-    return directRadios.map((selector) => {
-      let container = selector.parentElement || selector;
-      for (let depth = 0; container?.parentElement && depth < 8; depth += 1) {
-        const text = (container.innerText || container.textContent || "").trim();
-        if (/\b\d{5,}\b/.test(text) || /\b[A-Z]{2}\b/.test(text)) break;
-        container = container.parentElement;
-      }
-      return { tr: container || selector, selector };
-    });
-  }
-
-  const trs = $$("tr");
-  const rows = [];
-  for (const tr of trs) {
-    if (tr.querySelector("th")) continue;
-    const firstCell = tr.querySelector("td");
-    if (!firstCell) continue;
-    const selector =
-      firstCell.querySelector("input[type=radio]") ||
-      firstCell.querySelector("[role=radio]") ||
-      firstCell.querySelector("button") ||
-      firstCell.querySelector("input[type=checkbox]") ||
-      firstCell.querySelector("a") ||
-      firstCell.querySelector("label") ||
-      firstCell.querySelector("span,div");
-    if (selector) rows.push({ tr, selector });
-  }
-  return rows;
-}
-
 function pickAutoSelection(lastName, policyNumber) {
-  const rows = findSelectableRows();
-  if (rows.length === 0) {
-    return {
-      ok: false,
-      error: "No selectable rows on Auto Selection page",
-      debugTable: (document.body?.innerText ?? "").slice(0, 2000),
-      radios: radioSummaries(),
-    };
-  }
+  const rows = $$("tr").filter((tr) => $("input[type=radio]", tr));
+  if (rows.length === 0) return { ok: false, error: "No selectable rows on Auto Selection page" };
 
   let target = null;
   let pickedBy = "first";
@@ -156,13 +81,13 @@ function pickAutoSelection(lastName, policyNumber) {
   if (policyNumber) {
     const digits = String(policyNumber).replace(/\D/g, "");
     if (digits) {
-      target = rows.find(({ tr }) => (tr.innerText || tr.textContent || "").replace(/\D/g, "").includes(digits)) || null;
+      target = rows.find((tr) => tr.innerText.replace(/\D/g, "").includes(digits)) || null;
       if (target) pickedBy = "policy-number";
     }
   }
   if (!target && lastName) {
     const lower = String(lastName).trim().toLowerCase();
-    const matches = rows.filter(({ tr }) => (tr.innerText || tr.textContent || "").toLowerCase().includes(lower));
+    const matches = rows.filter((tr) => tr.innerText.toLowerCase().includes(lower));
     if (matches.length === 1) {
       target = matches[0];
       pickedBy = "last-name";
@@ -170,43 +95,9 @@ function pickAutoSelection(lastName, policyNumber) {
   }
   if (!target) target = rows[0];
 
-  const sel = target.selector;
-  const realInput =
-    (sel.tagName === "INPUT" && /radio|checkbox/i.test(sel.type || "") ? sel : null) ||
-    target.tr.querySelector?.("input[type=radio], input[type=checkbox]");
-  if (realInput && "checked" in realInput) {
-    humanClick(realInput);
-    realInput.checked = true;
-    realInput.dispatchEvent(new Event("input", { bubbles: true }));
-    realInput.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-  humanClick(sel);
-  if ("checked" in sel) {
-    sel.checked = true;
-    sel.dispatchEvent(new Event("input", { bubbles: true }));
-    sel.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-
-  const checked = !!findCheckedRadio();
-  return {
-    ok: true,
-    picked: pickedBy,
-    rowText: (target.tr.innerText || target.tr.textContent || "").replace(/\s+/g, " ").trim(),
-    selectorTag: sel.tagName,
-    checked,
-    radios: radioSummaries(),
-  };
-}
-
-function continueAutoSelection() {
-  const checkedRadio = findCheckedRadio();
-  if (!checkedRadio) {
-    return {
-      ok: false,
-      error: "No policy row is selected before Continue; refusing to submit State Farm form.",
-      radios: radioSummaries(),
-    };
-  }
+  const radio = $("input[type=radio]", target);
+  if (!radio) return { ok: false, error: "Selected row has no radio button" };
+  radio.click();
 
   const continueBtn =
     $$("button, input[type=submit], input[type=button]").find((b) => {
@@ -216,25 +107,8 @@ function continueAutoSelection() {
   if (!continueBtn) {
     return { ok: false, error: "Continue button not found on Auto Selection page" };
   }
-  const form = checkedRadio.form || checkedRadio.closest?.("form") || $("form");
-  let formFields = [];
-  try {
-    if (form && typeof FormData !== "undefined") {
-      formFields = Array.from(new FormData(form).entries()).map(([key, value]) => ({
-        key,
-        value: String(value).slice(0, 120),
-      }));
-    }
-  } catch {
-    formFields = [];
-  }
-  setTimeout(() => humanClick(continueBtn), 50);
-  return {
-    ok: true,
-    checkedName: checkedRadio.name || "",
-    checkedValue: String(checkedRadio.value ?? ""),
-    formFields,
-  };
+  setTimeout(() => continueBtn.click(), 50);
+  return { ok: true, picked: pickedBy, rowText: target.innerText.replace(/\s+/g, " ").trim() };
 }
 
 function getTextAfterLabel(labelRegex) {
@@ -332,9 +206,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return false;
       case "PICK_AUTO_SELECTION":
         sendResponse(pickAutoSelection(message.lastName, message.policyNumber));
-        return false;
-      case "CONTINUE_AUTO_SELECTION":
-        sendResponse(continueAutoSelection());
         return false;
       case "SCRAPE":
         if (!isOnPolicyInfoPage()) {

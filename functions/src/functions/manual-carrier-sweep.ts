@@ -177,6 +177,14 @@ export const startManualCarrierSweep = onCall(
       totalPolicies: inputs.length,
       successCount: 0,
       errorCount: 0,
+      policyQueue: inputs.map((p) => ({
+        policyId: p.policyId,
+        vin: p.vin,
+        borrowerLastName: p.borrowerLastName,
+        borrowerFirstName: p.borrowerFirstName ?? null,
+        policyNumber: p.policyNumber ?? null,
+        insuranceProvider: p.insuranceProvider ?? null,
+      })),
     });
 
     logger.info(

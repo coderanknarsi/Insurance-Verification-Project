@@ -1,17 +1,29 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { Browser } from "playwright-core";
 import { launchManagedChrome, type ManagedChrome } from "./chrome-launcher";
 import { connectToManagedChrome } from "./cdp";
 import { readFirebaseConfig, readChromeDebugPort } from "./config";
 import { CarrierMonitor } from "./carrier-monitor";
+import { OperatorRunEngine } from "./run-engine";
 import { logger } from "../shared/logger";
-import type { AppStatus, ChromeConnectionState } from "../shared/bridge-types";
+import type {
+  AppStatus,
+  ChromeConnectionState,
+  HumanReviewIpcPrompt,
+  HumanReviewIpcReply,
+  RunPolicyRequest,
+  RunPolicyResponse,
+} from "../shared/bridge-types";
 
 let mainWindow: BrowserWindow | null = null;
 let managedChrome: ManagedChrome | null = null;
 let browser: Browser | null = null;
 const carrierMonitor = new CarrierMonitor();
+const runEngine = new OperatorRunEngine();
+
+const pendingReviews = new Map<string, (choice: string) => void>();
 
 let chromeState: ChromeConnectionState = { status: "idle" };
 
@@ -64,6 +76,7 @@ async function startManagedChrome(): Promise<void> {
       });
       browser = null;
       carrierMonitor.setBrowser(null);
+      runEngine.setBrowser(null);
     });
 
     browser = await connectToManagedChrome(managedChrome.debugPort);
@@ -71,6 +84,7 @@ async function startManagedChrome(): Promise<void> {
       setChromeState({ status: "disconnected", reason: "CDP disconnected" });
       browser = null;
       carrierMonitor.setBrowser(null);
+      runEngine.setBrowser(null);
     });
 
     setChromeState({
@@ -79,9 +93,11 @@ async function startManagedChrome(): Promise<void> {
       contextCount: browser.contexts().length,
     });
     carrierMonitor.setBrowser(browser);
+    runEngine.setBrowser(browser);
   } catch (err) {
     setChromeState({ status: "error", message: String(err) });
     carrierMonitor.setBrowser(null);
+    runEngine.setBrowser(null);
   }
 }
 
@@ -118,6 +134,59 @@ function registerIpc(): void {
   ipcMain.handle("operator:recheck-carrier", async (_e, carrierId: string) => {
     await carrierMonitor.recheck(carrierId);
   });
+
+  ipcMain.handle(
+    "operator:run-policy",
+    async (_e, req: RunPolicyRequest): Promise<RunPolicyResponse> => {
+      const out = await runEngine.runPolicy({
+        runId: req.runId,
+        carrierId: req.carrierId,
+        policy: req.policy,
+        onHumanReview: async (review) => {
+          const requestId = randomUUID();
+          const prompt: HumanReviewIpcPrompt = {
+            requestId,
+            runId: review.runId,
+            policyId: review.policyId,
+            prompt: review.prompt,
+            options: review.options,
+            screenshotLabel: review.screenshotLabel,
+          };
+          return new Promise<string>((resolve) => {
+            pendingReviews.set(requestId, resolve);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send(
+                "operator:human-review-requested",
+                prompt,
+              );
+            } else {
+              pendingReviews.delete(requestId);
+              resolve("");
+            }
+          });
+        },
+      });
+      return {
+        result: out.result as RunPolicyResponse["result"],
+        screenshots: out.screenshots,
+        logs: out.logs,
+        durationMs: out.durationMs,
+      };
+    },
+  );
+
+  ipcMain.handle(
+    "operator:resolve-human-review",
+    (_e, reply: HumanReviewIpcReply) => {
+      const resolver = pendingReviews.get(reply.requestId);
+      if (resolver) {
+        pendingReviews.delete(reply.requestId);
+        resolver(reply.choice);
+      } else {
+        logger.warn("resolve-human-review for unknown requestId", reply);
+      }
+    },
+  );
 
   carrierMonitor.subscribe((statuses) => {
     if (mainWindow && !mainWindow.isDestroyed()) {

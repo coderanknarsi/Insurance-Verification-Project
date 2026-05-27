@@ -3,7 +3,11 @@ import type {
   AppStatus,
   CarrierStatus,
   FirebaseConfig,
+  HumanReviewIpcPrompt,
+  HumanReviewIpcReply,
   OperatorBridge,
+  RunPolicyRequest,
+  RunPolicyResponse,
 } from "../shared/bridge-types";
 
 const bridge: OperatorBridge = {
@@ -29,6 +33,16 @@ const bridge: OperatorBridge = {
     ipcRenderer.invoke("operator:open-carrier-login", carrierId) as Promise<void>,
   recheckCarrier: (carrierId) =>
     ipcRenderer.invoke("operator:recheck-carrier", carrierId) as Promise<void>,
+  runPolicy: (req: RunPolicyRequest) =>
+    ipcRenderer.invoke("operator:run-policy", req) as Promise<RunPolicyResponse>,
+  onHumanReviewRequested: (callback) => {
+    const listener = (_e: unknown, prompt: HumanReviewIpcPrompt) => callback(prompt);
+    ipcRenderer.on("operator:human-review-requested", listener);
+    return () =>
+      ipcRenderer.removeListener("operator:human-review-requested", listener);
+  },
+  resolveHumanReview: (reply: HumanReviewIpcReply) =>
+    ipcRenderer.invoke("operator:resolve-human-review", reply) as Promise<void>,
 };
 
 contextBridge.exposeInMainWorld("operator", bridge);

@@ -1,0 +1,280 @@
+﻿2026-05-17T13:19:14.065464Z	INFO		[simulate-sweep] Done simrun_1779023879228
+2026-05-17T13:19:13.941696Z	ERROR	[data-feed] Batch simrun_1779023879228_nvaDUr3gYm8dhuOnWkiO_state_farm failed: GaxiosError: Login failed for State Farm
+    at Gaxios._request (/workspace/node_modules/google-auth-library/node_modules/gaxios/build/cjs/src/gaxios.js:155:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async IdTokenClient.requestAsync (/workspace/node_modules/google-auth-library/build/src/auth/oauth2client.js:463:20)
+    at async sendBatchToEngine (/workspace/lib/functions/data-feed-dispatcher.js:243:22)
+    at async runSweepForOrg (/workspace/lib/functions/data-feed-dispatcher.js:203:13)
+    at async /workspace/lib/functions/simulate-verification-sweep.js:22:20
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:545:26 {
+  config: {
+    url: URL {
+      href: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app/verify',
+      origin: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      protocol: 'https:',
+      username: '',
+      password: '',
+      host: 'alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      hostname: 'alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      port: '',
+      pathname: '/verify',
+      search: '',
+      searchParams: URLSearchParams {},
+      hash: ''
+    },
+    method: 'POST',
+    headers: Headers {
+      authorization: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      'content-type': 'application/json',
+      'x-engine-secret': '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      'x-goog-api-client': 'gl-node/24.15.0',
+      'User-Agent': 'google-api-nodejs-client/10.6.1'
+    },
+    body: '{"batchId":"simrun_1779023879228_nvaDUr3gYm8dhuOnWkiO_state_farm","runId":"simrun_1779023879228","carrier":"state_farm","policies":[{"policyId":"TiZR7xM1CX70s6rOWhUJ","organizationId":"nvaDUr3gYm8dhuOnWkiO","borrowerId":"z7pg8kMd7mJGgHhvls2M","vehicleId":"qF9aTbYBJmqtsqjCDJwI","vin":"5TDKK3DC9ES477474","borrowerLastName":"Narsi","borrowerFirstName":"Ankit","policyNumber":"0456960-SFP-15","insuranceProvider":"State Farm"}]}',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor],
+    duplex: 'half'
+  },
+  response: Response {
+    size: 0,
+    data: {
+      error: 'Login failed for State Farm',
+      detail: 'Agent hit 3 consecutive errors: Failed to parse LLM response as JSON'
+    },
+    config: {
+      url: URL {},
+      method: 'POST',
+      headers: Headers {
+        authorization: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+        'content-type': 'application/json',
+        'x-engine-secret': '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+        'x-goog-api-client': 'gl-node/24.15.0',
+        'User-Agent': 'google-api-nodejs-client/10.6.1'
+      },
+      body: '{"batchId":"simrun_1779023879228_nvaDUr3gYm8dhuOnWkiO_state_farm","runId":"simrun_1779023879228","carrier":"state_farm","policies":[{"policyId":"TiZR7xM1CX70s6rOWhUJ","organizationId":"nvaDUr3gYm8dhuOnWkiO","borrowerId":"z7pg8kMd7mJGgHhvls2M","vehicleId":"qF9aTbYBJmqtsqjCDJwI","vin":"5TDKK3DC9ES477474","borrowerLastName":"Narsi","borrowerFirstName":"Ankit","policyNumber":"0456960-SFP-15","insuranceProvider":"State Farm"}]}',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor],
+      duplex: 'half'
+    },
+    Symbol(Body internals): {
+      body: [PassThrough],
+      stream: [PassThrough],
+      boundary: null,
+      disturbed: true,
+      error: null
+    },
+    Symbol(Response internals): {
+      type: 'default',
+      url: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app/verify',
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: [Object],
+      counter: 0,
+      highWaterMark: 16384
+    }
+  },
+  code: 500,
+  status: 500,
+  error: undefined,
+  Symbol(gaxios-gaxios-error): '7.1.3',
+  [cause]: {
+    message: 'Login failed for State Farm',
+    code: 500,
+    status: 'Internal Server Error'
+  }
+}	
+2026-05-17T13:17:59.893099Z	INFO		[data-feed] Org nvaDUr3gYm8dhuOnWkiO buckets
+2026-05-17T13:17:59.228378Z	INFO	[simulate-sweep] Starting simrun_1779023879228 for org=nvaDUr3gYm8dhuOnWkiO	
+2026-05-17T13:17:59.227464Z	DEBUG		Callable request verification passed
+2026-05-17T13:17:59.143073Z	INFO		
+2026-05-17T13:17:59.027660Z	INFO	Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.	
+2026-05-17T13:17:57.550133Z	INFO	Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.	
+2026-05-17T13:17:57.540136Z	INFO		
+2026-05-17T13:02:30.335350Z	INFO		[simulate-sweep] Done simrun_1779022908665
+2026-05-17T13:02:30.273435Z	ERROR	[data-feed] Batch simrun_1779022908665_nvaDUr3gYm8dhuOnWkiO_state_farm failed: GaxiosError: Login failed for State Farm
+    at Gaxios._request (/workspace/node_modules/google-auth-library/node_modules/gaxios/build/cjs/src/gaxios.js:155:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async IdTokenClient.requestAsync (/workspace/node_modules/google-auth-library/build/src/auth/oauth2client.js:463:20)
+    at async sendBatchToEngine (/workspace/lib/functions/data-feed-dispatcher.js:243:22)
+    at async runSweepForOrg (/workspace/lib/functions/data-feed-dispatcher.js:203:13)
+    at async /workspace/lib/functions/simulate-verification-sweep.js:22:20
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:545:26 {
+  config: {
+    url: URL {
+      href: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app/verify',
+      origin: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      protocol: 'https:',
+      username: '',
+      password: '',
+      host: 'alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      hostname: 'alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      port: '',
+      pathname: '/verify',
+      search: '',
+      searchParams: URLSearchParams {},
+      hash: ''
+    },
+    method: 'POST',
+    headers: Headers {
+      authorization: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      'content-type': 'application/json',
+      'x-engine-secret': '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      'x-goog-api-client': 'gl-node/24.15.0',
+      'User-Agent': 'google-api-nodejs-client/10.6.1'
+    },
+    body: '{"batchId":"simrun_1779022908665_nvaDUr3gYm8dhuOnWkiO_state_farm","runId":"simrun_1779022908665","carrier":"state_farm","policies":[{"policyId":"TiZR7xM1CX70s6rOWhUJ","organizationId":"nvaDUr3gYm8dhuOnWkiO","borrowerId":"z7pg8kMd7mJGgHhvls2M","vehicleId":"qF9aTbYBJmqtsqjCDJwI","vin":"5TDKK3DC9ES477474","borrowerLastName":"Narsi","borrowerFirstName":"Ankit","policyNumber":"0456960-SFP-15","insuranceProvider":"State Farm"}]}',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor],
+    duplex: 'half'
+  },
+  response: Response {
+    size: 0,
+    data: {
+      error: 'Login failed for State Farm',
+      detail: 'Agent hit 3 consecutive errors: Failed to parse LLM response as JSON'
+    },
+    config: {
+      url: URL {},
+      method: 'POST',
+      headers: Headers {
+        authorization: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+        'content-type': 'application/json',
+        'x-engine-secret': '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+        'x-goog-api-client': 'gl-node/24.15.0',
+        'User-Agent': 'google-api-nodejs-client/10.6.1'
+      },
+      body: '{"batchId":"simrun_1779022908665_nvaDUr3gYm8dhuOnWkiO_state_farm","runId":"simrun_1779022908665","carrier":"state_farm","policies":[{"policyId":"TiZR7xM1CX70s6rOWhUJ","organizationId":"nvaDUr3gYm8dhuOnWkiO","borrowerId":"z7pg8kMd7mJGgHhvls2M","vehicleId":"qF9aTbYBJmqtsqjCDJwI","vin":"5TDKK3DC9ES477474","borrowerLastName":"Narsi","borrowerFirstName":"Ankit","policyNumber":"0456960-SFP-15","insuranceProvider":"State Farm"}]}',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor],
+      duplex: 'half'
+    },
+    Symbol(Body internals): {
+      body: [PassThrough],
+      stream: [PassThrough],
+      boundary: null,
+      disturbed: true,
+      error: null
+    },
+    Symbol(Response internals): {
+      type: 'default',
+      url: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app/verify',
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: [Object],
+      counter: 0,
+      highWaterMark: 16384
+    }
+  },
+  code: 500,
+  status: 500,
+  error: undefined,
+  Symbol(gaxios-gaxios-error): '7.1.3',
+  [cause]: {
+    message: 'Login failed for State Farm',
+    code: 500,
+    status: 'Internal Server Error'
+  }
+}	
+2026-05-17T13:01:48.787686Z	INFO		[data-feed] Org nvaDUr3gYm8dhuOnWkiO buckets
+2026-05-17T13:01:48.663980Z	INFO	[simulate-sweep] Starting simrun_1779022908665 for org=nvaDUr3gYm8dhuOnWkiO	
+2026-05-17T13:01:48.663652Z	DEBUG		Callable request verification passed
+2026-05-17T13:01:48.654120Z	INFO		
+2026-05-17T13:01:48.596610Z	INFO		
+2026-05-17T12:58:54.507648Z	INFO		[simulate-sweep] Done simrun_1779022703435
+2026-05-17T12:58:54.436191Z	ERROR	[data-feed] Batch simrun_1779022703435_nvaDUr3gYm8dhuOnWkiO_state_farm failed: GaxiosError: Login failed for State Farm
+    at Gaxios._request (/workspace/node_modules/google-auth-library/node_modules/gaxios/build/cjs/src/gaxios.js:155:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async IdTokenClient.requestAsync (/workspace/node_modules/google-auth-library/build/src/auth/oauth2client.js:463:20)
+    at async sendBatchToEngine (/workspace/lib/functions/data-feed-dispatcher.js:243:22)
+    at async runSweepForOrg (/workspace/lib/functions/data-feed-dispatcher.js:203:13)
+    at async /workspace/lib/functions/simulate-verification-sweep.js:22:20
+    at async /workspace/node_modules/firebase-functions/lib/common/providers/https.js:545:26 {
+  config: {
+    url: URL {
+      href: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app/verify',
+      origin: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      protocol: 'https:',
+      username: '',
+      password: '',
+      host: 'alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      hostname: 'alt-engine-worker-hotmvg3jaq-uc.a.run.app',
+      port: '',
+      pathname: '/verify',
+      search: '',
+      searchParams: URLSearchParams {},
+      hash: ''
+    },
+    method: 'POST',
+    headers: Headers {
+      authorization: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      'content-type': 'application/json',
+      'x-engine-secret': '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      'x-goog-api-client': 'gl-node/24.15.0',
+      'User-Agent': 'google-api-nodejs-client/10.6.1'
+    },
+    body: '{"batchId":"simrun_1779022703435_nvaDUr3gYm8dhuOnWkiO_state_farm","runId":"simrun_1779022703435","carrier":"state_farm","policies":[{"policyId":"TiZR7xM1CX70s6rOWhUJ","organizationId":"nvaDUr3gYm8dhuOnWkiO","borrowerId":"z7pg8kMd7mJGgHhvls2M","vehicleId":"qF9aTbYBJmqtsqjCDJwI","vin":"5TDKK3DC9ES477474","borrowerLastName":"Narsi","borrowerFirstName":"Ankit","policyNumber":"0456960-SFP-15","insuranceProvider":"State Farm"}]}',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor],
+    duplex: 'half'
+  },
+  response: Response {
+    size: 0,
+    data: {
+      error: 'Login failed for State Farm',
+      detail: 'Agent hit 3 consecutive errors: Failed to parse LLM response as JSON'
+    },
+    config: {
+      url: URL {},
+      method: 'POST',
+      headers: Headers {
+        authorization: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+        'content-type': 'application/json',
+        'x-engine-secret': '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+        'x-goog-api-client': 'gl-node/24.15.0',
+        'User-Agent': 'google-api-nodejs-client/10.6.1'
+      },
+      body: '{"batchId":"simrun_1779022703435_nvaDUr3gYm8dhuOnWkiO_state_farm","runId":"simrun_1779022703435","carrier":"state_farm","policies":[{"policyId":"TiZR7xM1CX70s6rOWhUJ","organizationId":"nvaDUr3gYm8dhuOnWkiO","borrowerId":"z7pg8kMd7mJGgHhvls2M","vehicleId":"qF9aTbYBJmqtsqjCDJwI","vin":"5TDKK3DC9ES477474","borrowerLastName":"Narsi","borrowerFirstName":"Ankit","policyNumber":"0456960-SFP-15","insuranceProvider":"State Farm"}]}',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor],
+      duplex: 'half'
+    },
+    Symbol(Body internals): {
+      body: [PassThrough],
+      stream: [PassThrough],
+      boundary: null,
+      disturbed: true,
+      error: null
+    },
+    Symbol(Response internals): {
+      type: 'default',
+      url: 'https://alt-engine-worker-hotmvg3jaq-uc.a.run.app/verify',
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: [Object],
+      counter: 0,
+      highWaterMark: 16384
+    }
+  },
+  code: 500,
+  status: 500,
+  error: undefined,
+  Symbol(gaxios-gaxios-error): '7.1.3',
+  [cause]: {
+    message: 'Login failed for State Farm',
+    code: 500,
+    status: 'Internal Server Error'
+  }
+}	
+2026-05-17T12:58:24.000817Z	INFO		[data-feed] Org nvaDUr3gYm8dhuOnWkiO buckets
+2026-05-17T12:58:23.434670Z	INFO	[simulate-sweep] Starting simrun_1779022703435 for org=nvaDUr3gYm8dhuOnWkiO	
+2026-05-17T12:58:23.433973Z	DEBUG		Callable request verification passed
+2026-05-17T12:58:23.358395Z	INFO		
+2026-05-17T12:58:23.275045Z	INFO	Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.	
+2026-05-17T12:58:21.862583Z	INFO	Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.	
+2026-05-17T12:58:21.842555Z	INFO		
