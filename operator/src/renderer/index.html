@@ -7,48 +7,158 @@
     <style>
       :root {
         color-scheme: dark;
-        font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
       }
       body {
         margin: 0;
         padding: 32px;
         background: #0b0d10;
         color: #e7e9ec;
+        min-height: 100vh;
       }
       h1 {
-        font-size: 18px;
+        font-size: 20px;
         margin: 0 0 4px;
+        letter-spacing: -0.01em;
       }
-      p {
+      .subtitle {
         color: #8b9099;
         font-size: 13px;
+        margin: 0 0 24px;
       }
       .card {
         background: #14181d;
         border: 1px solid #1f242b;
         border-radius: 12px;
         padding: 20px;
-        margin-top: 16px;
+        margin-bottom: 16px;
       }
-      .badge {
-        display: inline-block;
-        padding: 2px 8px;
-        font-size: 11px;
+      .card h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #8b9099;
+        margin: 0 0 12px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
         border-radius: 999px;
         background: #2a2f37;
-        color: #9aa0a8;
+        flex-shrink: 0;
+      }
+      .dot.green { background: #22c55e; }
+      .dot.yellow { background: #eab308; }
+      .dot.red { background: #ef4444; }
+      .dot.grey { background: #4b5563; }
+      .label { font-weight: 600; font-size: 14px; }
+      .detail { color: #8b9099; font-size: 12px; }
+      .right { margin-left: auto; }
+      button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #1f242b;
+        color: #e7e9ec;
+      }
+      button:hover { filter: brightness(1.1); }
+      input {
+        width: 100%;
+        background: #0b0d10;
+        color: #e7e9ec;
+        border: 1px solid #2a2f37;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+        box-sizing: border-box;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        color: #8b9099;
+        margin: 0 0 4px;
+      }
+      .field { margin-bottom: 12px; }
+      .error { color: #f87171; font-size: 12px; margin-top: 8px; min-height: 16px; }
+      .warn {
+        margin-top: 12px;
+        padding: 10px;
+        background: rgba(234, 179, 8, 0.1);
+        border: 1px solid rgba(234, 179, 8, 0.3);
+        color: #facc15;
+        border-radius: 8px;
+        font-size: 12px;
+      }
+      #fatal-error {
+        color: #f87171;
+        font-size: 12px;
+        margin-top: 16px;
       }
     </style>
   </head>
   <body>
     <h1>AutoLien Operator</h1>
-    <p>Phase 0 scaffold. UI lands in Phase 5.</p>
+    <p class="subtitle">Phase 1 · Electron + Chrome via CDP + Firebase Auth</p>
 
-    <div class="card">
-      <span class="badge">scaffold</span>
-      <p style="margin-top: 12px">
-        This window will host the carrier login status, active runs, and human-review queue.
-      </p>
-    </div>
+    <!-- Chrome status -->
+    <section class="card">
+      <h2>Managed Chrome</h2>
+      <div class="row">
+        <span id="chrome-dot" class="dot grey"></span>
+        <div>
+          <div id="chrome-label" class="label">Idle</div>
+          <div id="chrome-detail" class="detail">Chrome not started yet.</div>
+        </div>
+        <button id="relaunch-chrome-btn" class="secondary right">Relaunch Chrome</button>
+      </div>
+    </section>
+
+    <!-- Auth -->
+    <section class="card">
+      <h2>Account</h2>
+
+      <div id="signed-out" style="display:none">
+        <form id="signin-form">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" required />
+          </div>
+          <button type="submit">Sign In</button>
+          <div id="auth-error" class="error"></div>
+        </form>
+      </div>
+
+      <div id="signed-in" style="display:none">
+        <div class="row">
+          <span class="dot green"></span>
+          <div>
+            <div class="label">Signed in</div>
+            <div id="user-email" class="detail"></div>
+          </div>
+          <button id="signout-btn" class="secondary right">Sign Out</button>
+        </div>
+        <div id="guard-msg" class="warn" style="display:none"></div>
+      </div>
+    </section>
+
+    <div id="fatal-error"></div>
+
+    <script src="./bundle.js"></script>
   </body>
 </html>
+

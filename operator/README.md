@@ -6,7 +6,18 @@ See [`docs/superpowers/specs/2026-05-27-autolien-operator-design.md`](../docs/su
 
 ## Status
 
-Phase 0 — scaffold only. No working build yet. Do not run.
+Phase 1 — runnable skeleton. Launches a managed Chrome window via CDP, signs into Firebase from the operator window. No carrier work yet (Phase 4).
+
+## First-time setup
+
+1. Copy `.env.example` to `.env` and fill in Firebase web config values (same project as the dashboard: `insurance-track-os`).
+2. `npm install`
+3. `npm run build`
+4. `npm start`
+
+The first launch opens a dedicated Chrome window under
+`%LOCALAPPDATA%\AutoLienOperator\chrome-profile`. That profile is separate from
+your normal Chrome; use it only for sweep work.
 
 ## Layout
 
@@ -32,7 +43,7 @@ npm start
 ## Phase tracker
 
 - [x] Phase 0 — Spec + scaffold
-- [ ] Phase 1 — Electron + managed Chrome + Firebase Auth
+- [x] Phase 1 — Electron + managed Chrome + Firebase Auth
 - [ ] Phase 2 — Carrier login tracking
 - [ ] Phase 3 — Backend generalization
 - [ ] Phase 4 — State Farm adapter v2
