@@ -840,6 +840,58 @@ export function callFinalizeStateFarmSweep(data: {
   )(data);
 }
 
+// ---- Manual carrier sweep (AutoLien Operator desktop app, generalized) ----
+
+export interface ManualSweepPolicyInput {
+  policyId: string;
+  organizationId: string;
+  borrowerId: string;
+  vehicleId: string;
+  vin: string;
+  borrowerLastName: string;
+  borrowerFirstName?: string;
+  policyNumber?: string;
+  insuranceProvider?: string;
+}
+
+export interface StartManualCarrierSweepResult {
+  runId: string;
+  carrierId: string;
+  policies: ManualSweepPolicyInput[];
+}
+
+export function callStartManualCarrierSweep(data: {
+  organizationId: string;
+  carrierId: string;
+}) {
+  return httpsCallable<typeof data, StartManualCarrierSweepResult>(
+    getClientFunctions(),
+    "startManualCarrierSweep"
+  )(data);
+}
+
+export function callFinalizeManualSweep(data: {
+  runId: string;
+  status?: "completed" | "failed" | "cancelled";
+}) {
+  return httpsCallable<typeof data, { ok: boolean }>(
+    getClientFunctions(),
+    "finalizeManualSweep"
+  )(data);
+}
+
+export function callResolveHumanReview(data: {
+  runId: string;
+  policyId: string;
+  reviewId?: string;
+  choice: string;
+}) {
+  return httpsCallable<typeof data, { ok: boolean }>(
+    getClientFunctions(),
+    "resolveHumanReview"
+  )(data);
+}
+
 // Demo
 export function callGetDemoToken() {
   return httpsCallable<void, { token: string }>(

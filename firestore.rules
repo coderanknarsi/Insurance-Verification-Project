@@ -100,6 +100,12 @@ service cloud.firestore {
           get(/databases/$(database)/documents/dataFeedRuns/$(runId)).data.createdBy == request.auth.uid;
         allow write: if false;
       }
+
+      match /humanReviews/{reviewId} {
+        allow read: if request.auth != null &&
+          get(/databases/$(database)/documents/dataFeedRuns/$(runId)).data.createdBy == request.auth.uid;
+        allow write: if false;
+      }
     }
   }
 }

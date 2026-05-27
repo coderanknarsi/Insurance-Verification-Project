@@ -524,7 +524,7 @@ export default function AdminDashboard() {
             )}
 
             {activeTab === "sweeps" && (
-              <SweepsTab />
+              <SweepsTab orgs={data?.organizations ?? []} />
             )}
           </>
         ) : null}
@@ -750,7 +750,43 @@ function OrgDetailPanel({
 
 /* ─── Verification Sweeps Tab ───────────────────────────────── */
 
-function SweepsTab() {
+function SweepsTab({ orgs }: { orgs: AdminOrgSummary[] }) {
+  const [selectedOrgId, setSelectedOrgId] = useState<string>("");
+  const [starting, setStarting] = useState(false);
+  const [lastRun, setLastRun] = useState<
+    | { runId: string; carrierId: string; policyCount: number; orgName: string }
+    | null
+  >(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function startSweep() {
+    if (!selectedOrgId) {
+      setError("Select a dealership first.");
+      return;
+    }
+    setError(null);
+    setStarting(true);
+    try {
+      const { callStartManualCarrierSweep } = await import("@/lib/api");
+      const res = await callStartManualCarrierSweep({
+        organizationId: selectedOrgId,
+        carrierId: "state-farm",
+      });
+      const orgName =
+        orgs.find((o) => o.id === selectedOrgId)?.name ?? selectedOrgId;
+      setLastRun({
+        runId: res.data.runId,
+        carrierId: res.data.carrierId,
+        policyCount: res.data.policies.length,
+        orgName,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -762,21 +798,55 @@ function SweepsTab() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <p className="text-muted-foreground">
-            This section runs carrier verification sweeps through the AutoLien Operator desktop app
-            on your machine. Phase 0 scaffold — UI lands in Phase 5.
+            Runs carrier verification sweeps through the AutoLien Operator desktop
+            app on your machine. Start a run here; the operator app will pick it up
+            and drive the managed Chrome window.
           </p>
 
-          <div className="rounded-lg border border-border bg-card/50 p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">Phase 0</Badge>
-              <span className="text-muted-foreground">Spec + scaffold committed.</span>
+          <div className="rounded-lg border border-border bg-card/50 p-4 space-y-3">
+            <div className="text-sm font-medium">Run State Farm sweep</div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
+                <SelectTrigger className="sm:w-72">
+                  <SelectValue placeholder="Select a dealership" />
+                </SelectTrigger>
+                <SelectContent>
+                  {orgs.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={startSweep}
+                disabled={starting || !selectedOrgId}
+                className="gap-2"
+              >
+                {starting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Start Sweep
+              </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Design doc: <code>docs/superpowers/specs/2026-05-27-autolien-operator-design.md</code>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Operator workspace: <code>operator/</code>
-            </p>
+            {error && (
+              <p className="text-xs text-red-400">{error}</p>
+            )}
+            {lastRun && (
+              <div className="rounded-md border border-green-500/20 bg-green-500/10 p-3 text-xs">
+                <div className="font-medium text-green-400">
+                  Run created: {lastRun.runId}
+                </div>
+                <div className="text-muted-foreground mt-1">
+                  {lastRun.policyCount} policy{lastRun.policyCount === 1 ? "" : "ies"}{" "}
+                  queued for <strong>{lastRun.orgName}</strong> on{" "}
+                  <strong>{lastRun.carrierId}</strong>. Open the AutoLien Operator
+                  app to drive the sweep.
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-border bg-card/50 p-4 space-y-2">

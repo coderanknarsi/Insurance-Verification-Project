@@ -80,6 +80,15 @@ export {
   recordStateFarmSweepResult,
   finalizeStateFarmSweep,
 } from "./functions/state-farm-sweep";
+
+// Manual carrier sweep (AutoLien Operator desktop app, generalized)
+export {
+  startManualCarrierSweep,
+  recordManualSweepResult,
+  finalizeManualSweep,
+  requestHumanReview,
+  resolveHumanReview,
+} from "./functions/manual-carrier-sweep";
 export { onOrgOnboardingComplete } from "./functions/onboarding-kickoff";
 export { getOrgVerificationStatus } from "./functions/get-org-verification-status";
 
