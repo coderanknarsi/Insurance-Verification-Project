@@ -12,6 +12,8 @@
     "copy:assets": "node scripts/copy-assets.js",
     "start": "electron .",
     "dev": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win portable dir",
+    "dist:installer": "npm run build && electron-builder --win nsis",
     "lint": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "clean": "rimraf dist"
   },
@@ -39,7 +41,18 @@
       "package.json"
     ],
     "win": {
-      "target": ["nsis"]
+      "target": [
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "portable": {
+      "artifactName": "AutoLien-Operator-${version}-portable.exe"
     }
   }
 }

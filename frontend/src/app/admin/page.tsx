@@ -862,7 +862,186 @@ function SweepsTab({ orgs }: { orgs: AdminOrgSummary[] }) {
           </div>
         </CardContent>
       </Card>
+
+      <ActiveRunsPanel />
     </div>
+  );
+}
+
+/* ─── Active operator runs + pending human reviews ──────────── */
+
+interface ActiveRunDoc {
+  id: string;
+  runId: string;
+  carrierId?: string;
+  status: string;
+  totalPolicies?: number;
+  successCount?: number;
+  errorCount?: number;
+  organizationId?: string;
+}
+
+interface HumanReviewDoc {
+  id: string;
+  runId: string;
+  policyId: string;
+  prompt: string;
+  options: Array<{ id: string; label: string; description?: string }>;
+  status: string;
+  screenshotPath?: string;
+}
+
+function ActiveRunsPanel() {
+  const [runs, setRuns] = useState<ActiveRunDoc[]>([]);
+  const [reviews, setReviews] = useState<Record<string, HumanReviewDoc[]>>({});
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ getClientFirestore }, firestoreMod] = await Promise.all([
+        import("@/lib/firebase"),
+        import("firebase/firestore"),
+      ]);
+      if (cancelled) return;
+      const db = getClientFirestore();
+      const q = firestoreMod.query(
+        firestoreMod.collection(db, "dataFeedRuns"),
+        firestoreMod.where("mode", "==", "manual-operator"),
+        firestoreMod.orderBy("startedAt", "desc"),
+        firestoreMod.limit(10),
+      );
+      const unsub = firestoreMod.onSnapshot(q, (snap) => {
+        const out: ActiveRunDoc[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<ActiveRunDoc, "id">),
+        }));
+        setRuns(out);
+      });
+      return () => unsub();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (runs.length === 0) return;
+    let cancelled = false;
+    const unsubs: Array<() => void> = [];
+    (async () => {
+      const [{ getClientFirestore }, firestoreMod] = await Promise.all([
+        import("@/lib/firebase"),
+        import("firebase/firestore"),
+      ]);
+      if (cancelled) return;
+      const db = getClientFirestore();
+      for (const run of runs) {
+        if (run.status !== "running" && run.status !== "awaiting_operator") continue;
+        const q = firestoreMod.query(
+          firestoreMod.collection(db, "dataFeedRuns", run.id, "humanReviews"),
+          firestoreMod.where("status", "==", "pending"),
+        );
+        const unsub = firestoreMod.onSnapshot(q, (snap) => {
+          const list: HumanReviewDoc[] = snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<HumanReviewDoc, "id">),
+          }));
+          setReviews((prev) => ({ ...prev, [run.id]: list }));
+        });
+        unsubs.push(unsub);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [runs]);
+
+  async function resolve(runId: string, policyId: string, reviewId: string, choice: string) {
+    setResolving(reviewId);
+    try {
+      const { callResolveHumanReview } = await import("@/lib/api");
+      await callResolveHumanReview({ runId, policyId, reviewId, choice });
+    } catch (err) {
+      console.error("resolveHumanReview failed", err);
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setResolving(null);
+    }
+  }
+
+  if (runs.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Loader2 className="h-5 w-5 text-accent" />
+          Active Operator Runs
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {runs.map((run) => {
+          const pending = reviews[run.id] ?? [];
+          return (
+            <div
+              key={run.id}
+              className="rounded-lg border border-border bg-card/50 p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{run.runId}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {run.carrierId} ·{" "}
+                    {run.successCount ?? 0}/{run.totalPolicies ?? 0} ok ·{" "}
+                    {run.errorCount ?? 0} errors
+                  </div>
+                </div>
+                <span className="text-xs px-2 py-1 rounded-full bg-card border border-border">
+                  {run.status}
+                </span>
+              </div>
+              {pending.length > 0 && (
+                <div className="space-y-2 border-t border-border pt-2">
+                  <div className="text-xs font-medium text-amber-400">
+                    Human review needed
+                  </div>
+                  {pending.map((r) => (
+                    <div
+                      key={r.id}
+                      className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 space-y-2"
+                    >
+                      <div className="text-xs">{r.prompt}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        Policy {r.policyId}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {r.options.map((opt) => (
+                          <Button
+                            key={opt.id}
+                            size="sm"
+                            variant="secondary"
+                            disabled={resolving === r.id}
+                            onClick={() =>
+                              resolve(run.id, r.policyId, r.id, opt.id)
+                            }
+                          >
+                            {opt.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 

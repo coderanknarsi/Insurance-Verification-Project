@@ -6,7 +6,7 @@ See [`docs/superpowers/specs/2026-05-27-autolien-operator-design.md`](../docs/su
 
 ## Status
 
-Phase 1 — runnable skeleton. Launches a managed Chrome window via CDP, signs into Firebase from the operator window. No carrier work yet (Phase 4).
+All 8 phases scaffolded. State Farm is the first fully-driven carrier; Progressive, Allstate, National General, GEICO, and Nationwide are stub adapters wired into the registry awaiting real flows.
 
 ## First-time setup
 
@@ -44,10 +44,24 @@ npm start
 
 - [x] Phase 0 — Spec + scaffold
 - [x] Phase 1 — Electron + managed Chrome + Firebase Auth
-- [ ] Phase 2 — Carrier login tracking
-- [ ] Phase 3 — Backend generalization
-- [ ] Phase 4 — State Farm adapter v2
-- [ ] Phase 5 — Operator UI + human review
-- [ ] Phase 6 — AI vision fallback
-- [ ] Phase 7 — Additional carriers
-- [ ] Phase 8 — Signed installer + retire extension
+- [x] Phase 2 — Carrier login tracking
+- [x] Phase 3 — Backend generalization
+- [x] Phase 4 — State Farm adapter v2 + run engine
+- [x] Phase 5 — Operator UI + dashboard human-review surface
+- [x] Phase 6 — AI vision fallback (stub, gated on `OPERATOR_AI_ASSIST=1`)
+- [x] Phase 7 — Additional carrier scaffolds
+- [x] Phase 8 — Portable + NSIS installer config; extension retired
+
+## Packaging
+
+```powershell
+cd operator
+npm run dist            # portable + NSIS installer
+npm run dist:installer  # NSIS installer only
+```
+
+Artifacts land in `operator/release/`.
+
+## Retiring the Chrome extension
+
+The `extension/` folder remains as a reference for the State Farm scraping logic (selectors and DOM-walking helpers in `extension/content-script.js`) but is no longer the recommended way to run sweeps. Once every carrier has a working adapter in the operator, the extension folder can be removed.

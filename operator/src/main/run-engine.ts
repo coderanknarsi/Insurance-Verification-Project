@@ -7,6 +7,7 @@ import type {
   ScrapeResult,
 } from "../carriers/types";
 import { logger } from "../shared/logger";
+import { AiAssistant } from "./ai-assist";
 
 export interface CapturedScreenshot {
   label: string;
@@ -38,6 +39,7 @@ export type HumanReviewBridge = (review: {
 export class OperatorRunEngine {
   private browser: Browser | null = null;
   private carrierPages = new Map<string, Page>();
+  private ai = new AiAssistant();
 
   setBrowser(browser: Browser | null): void {
     if (this.browser !== browser) {
@@ -100,7 +102,12 @@ export class OperatorRunEngine {
           screenshotLabel: lastShot,
         });
       },
+      aiAssist: this.ai.isEnabled()
+        ? async (prompt: string) => this.ai.suggest(prompt)
+        : undefined,
     };
+
+    this.ai.resetForVin();
 
     let result: ScrapeResult;
     try {
