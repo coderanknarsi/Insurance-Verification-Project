@@ -7,7 +7,12 @@ import {
   type Auth,
   type User,
 } from "firebase/auth";
-import type { AppStatus, OperatorBridge } from "../shared/bridge-types";
+import type {
+  AppStatus,
+  CarrierLoginStatus,
+  CarrierStatus,
+  OperatorBridge,
+} from "../shared/bridge-types";
 
 declare global {
   interface Window {
@@ -129,13 +134,99 @@ async function handleRelaunchChrome(): Promise<void> {
   await bridge.relaunchChrome();
 }
 
+function carrierPillClass(status: CarrierLoginStatus): string {
+  switch (status) {
+    case "logged-in": return "green";
+    case "checking": return "yellow";
+    case "logged-out": return "red";
+    case "error": return "red";
+    default: return "grey";
+  }
+}
+
+function carrierPillLabel(status: CarrierLoginStatus): string {
+  switch (status) {
+    case "logged-in": return "Logged in";
+    case "checking": return "Checking…";
+    case "logged-out": return "Login needed";
+    case "error": return "Error";
+    default: return "Unknown";
+  }
+}
+
+function renderCarriers(statuses: CarrierStatus[]): void {
+  const container = $("carriers-list");
+  if (statuses.length === 0) {
+    container.innerHTML = '<div class="detail">No carriers configured.</div>';
+    return;
+  }
+  container.innerHTML = "";
+  for (const c of statuses) {
+    const row = document.createElement("div");
+    row.className = "carrier-row";
+
+    const left = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "label";
+    name.textContent = c.name;
+    const sub = document.createElement("div");
+    sub.className = "detail";
+    sub.textContent = formatCarrierSub(c);
+    left.appendChild(name);
+    left.appendChild(sub);
+
+    const pill = document.createElement("span");
+    pill.className = "pill " + carrierPillClass(c.status);
+    pill.textContent = carrierPillLabel(c.status);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    const loginBtn = document.createElement("button");
+    loginBtn.className = "secondary";
+    loginBtn.textContent = "Open login";
+    loginBtn.onclick = () => {
+      bridge.openCarrierLogin(c.id).catch((err) => {
+        sub.textContent = err instanceof Error ? err.message : String(err);
+      });
+    };
+
+    const recheckBtn = document.createElement("button");
+    recheckBtn.className = "secondary";
+    recheckBtn.textContent = "Recheck";
+    recheckBtn.onclick = () => {
+      bridge.recheckCarrier(c.id).catch(() => {});
+    };
+
+    actions.appendChild(loginBtn);
+    actions.appendChild(recheckBtn);
+
+    row.appendChild(left);
+    row.appendChild(pill);
+    row.appendChild(actions);
+    container.appendChild(row);
+  }
+}
+
+function formatCarrierSub(c: CarrierStatus): string {
+  if (c.lastError) return c.lastError;
+  if (!c.lastCheckedAt) return "Not checked yet";
+  const secs = Math.max(0, Math.round((Date.now() - c.lastCheckedAt) / 1000));
+  return `Last checked ${secs}s ago`;
+}
+
 async function main(): Promise<void> {
   // Wire status updates.
   const initial = await bridge.getAppStatus();
   renderChromeStatus(initial);
   bridge.onAppStatus(renderChromeStatus);
 
-  // Wire Firebase Auth.
+  // Carrier statuses.
+  const initialCarriers = await bridge.getCarrierStatuses();
+  renderCarriers(initialCarriers);
+  bridge.onCarrierStatuses(renderCarriers);
+
+  // Firebase Auth.
   const auth = await initFirebase();
   onAuthStateChanged(auth, renderUser);
 

@@ -4,12 +4,14 @@ import type { Browser } from "playwright-core";
 import { launchManagedChrome, type ManagedChrome } from "./chrome-launcher";
 import { connectToManagedChrome } from "./cdp";
 import { readFirebaseConfig, readChromeDebugPort } from "./config";
+import { CarrierMonitor } from "./carrier-monitor";
 import { logger } from "../shared/logger";
 import type { AppStatus, ChromeConnectionState } from "../shared/bridge-types";
 
 let mainWindow: BrowserWindow | null = null;
 let managedChrome: ManagedChrome | null = null;
 let browser: Browser | null = null;
+const carrierMonitor = new CarrierMonitor();
 
 let chromeState: ChromeConnectionState = { status: "idle" };
 
@@ -61,12 +63,14 @@ async function startManagedChrome(): Promise<void> {
         reason: `Chrome exited (code ${code ?? "unknown"})`,
       });
       browser = null;
+      carrierMonitor.setBrowser(null);
     });
 
     browser = await connectToManagedChrome(managedChrome.debugPort);
     browser.on("disconnected", () => {
       setChromeState({ status: "disconnected", reason: "CDP disconnected" });
       browser = null;
+      carrierMonitor.setBrowser(null);
     });
 
     setChromeState({
@@ -74,8 +78,10 @@ async function startManagedChrome(): Promise<void> {
       debugPort: managedChrome.debugPort,
       contextCount: browser.contexts().length,
     });
+    carrierMonitor.setBrowser(browser);
   } catch (err) {
     setChromeState({ status: "error", message: String(err) });
+    carrierMonitor.setBrowser(null);
   }
 }
 
@@ -104,6 +110,19 @@ function registerIpc(): void {
   ipcMain.handle("operator:get-app-status", () => appStatus());
   ipcMain.handle("operator:relaunch-chrome", async () => {
     await startManagedChrome();
+  });
+  ipcMain.handle("operator:get-carrier-statuses", () => carrierMonitor.list());
+  ipcMain.handle("operator:open-carrier-login", async (_e, carrierId: string) => {
+    await carrierMonitor.openLogin(carrierId);
+  });
+  ipcMain.handle("operator:recheck-carrier", async (_e, carrierId: string) => {
+    await carrierMonitor.recheck(carrierId);
+  });
+
+  carrierMonitor.subscribe((statuses) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("operator:carrier-statuses", statuses);
+    }
   });
 }
 

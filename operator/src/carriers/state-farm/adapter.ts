@@ -6,8 +6,14 @@ import type {
   ScrapeResult,
 } from "../types";
 
-const LOGIN_URL = "https://b2b.statefarm.com/b2b/InsuranceInquiry/start";
-const SEARCH_URL = "https://b2b.statefarm.com/b2b/InsuranceInquiry/searchAuto";
+const LOGIN_URL = "https://apps.b2b.statefarm.com/login";
+// The Insurance Inquiry Tool's policy search page. Hitting it while
+// authenticated lands on a URL containing this fragment. While unauthenticated
+// it redirects back to /login.
+const SEARCH_URL =
+  "https://apps.b2b.statefarm.com/b2b/InsuranceInquiry/policySearch";
+const SEARCH_URL_FRAGMENT = "InsuranceInquiry/policySearch";
+const LOGIN_URL_FRAGMENT = "/login";
 
 export const stateFarmAdapter: CarrierAdapter = {
   id: "state-farm",
@@ -16,10 +22,30 @@ export const stateFarmAdapter: CarrierAdapter = {
   searchUrl: SEARCH_URL,
 
   async isLoggedIn(page: Page): Promise<boolean> {
-    // Heartbeat: load the search page. If we end up at the login form, we're out.
-    // Implemented in Phase 2.
-    void page;
-    throw new Error("stateFarmAdapter.isLoggedIn not implemented (Phase 2)");
+    // Heartbeat: visit the policy-search page. If we land on the login page,
+    // the session is gone.
+    try {
+      await page.goto(SEARCH_URL, {
+        waitUntil: "domcontentloaded",
+        timeout: 20_000,
+      });
+    } catch {
+      return false;
+    }
+    const url = page.url();
+    if (url.includes(LOGIN_URL_FRAGMENT) && !url.includes(SEARCH_URL_FRAGMENT)) {
+      return false;
+    }
+    if (url.includes(SEARCH_URL_FRAGMENT)) {
+      return true;
+    }
+    // Fallback: look for the VIN input as a positive signal.
+    try {
+      const vinInput = await page.$('input[name="vin"], input[id*="vin" i]');
+      return Boolean(vinInput);
+    } catch {
+      return false;
+    }
   },
 
   async verifyVin(
@@ -27,13 +53,6 @@ export const stateFarmAdapter: CarrierAdapter = {
     policy: PolicyInput,
     ctx: AdapterContext,
   ): Promise<ScrapeResult> {
-    // Phase 4: deterministic Playwright flow:
-    //   1. Navigate to search page if not already there.
-    //   2. Fill VIN + last name.
-    //   3. Click Search; wait for navigation/results.
-    //   4. If Auto Selection screen: pick single row OR open human review.
-    //   5. Scrape policy detail page.
-    //   6. Back to search.
     void page;
     void policy;
     ctx.log("stateFarmAdapter.verifyVin called (not implemented)");

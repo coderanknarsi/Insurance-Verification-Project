@@ -17,6 +17,23 @@ export type ChromeConnectionState =
   | { status: "disconnected"; reason: string }
   | { status: "error"; message: string };
 
+export type CarrierLoginStatus =
+  | "unknown"
+  | "checking"
+  | "logged-in"
+  | "logged-out"
+  | "error";
+
+export interface CarrierStatus {
+  id: string;
+  name: string;
+  loginUrl: string;
+  searchUrl: string;
+  status: CarrierLoginStatus;
+  lastCheckedAt: number | null;
+  lastError: string | null;
+}
+
 export interface AppStatus {
   chrome: ChromeConnectionState;
   appVersion: string;
@@ -27,4 +44,8 @@ export interface OperatorBridge {
   getAppStatus: () => Promise<AppStatus>;
   onAppStatus: (callback: (status: AppStatus) => void) => () => void;
   relaunchChrome: () => Promise<void>;
+  getCarrierStatuses: () => Promise<CarrierStatus[]>;
+  onCarrierStatuses: (callback: (statuses: CarrierStatus[]) => void) => () => void;
+  openCarrierLogin: (carrierId: string) => Promise<void>;
+  recheckCarrier: (carrierId: string) => Promise<void>;
 }
