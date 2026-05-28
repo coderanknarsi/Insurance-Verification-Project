@@ -1,8 +1,10 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
+  GoogleAuthProvider,
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut as fbSignOut,
   type Auth,
   type User,
@@ -148,6 +150,24 @@ async function handleSignIn(e: SubmitEvent): Promise<void> {
     passwordInput.value = "";
   } catch (err) {
     errorEl.textContent = err instanceof Error ? err.message : String(err);
+  }
+}
+
+async function handleGoogleSignIn(): Promise<void> {
+  const errorEl = $("auth-error");
+  errorEl.textContent = "";
+
+  const auth = await initFirebase();
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    errorEl.textContent = message.includes("operation-not-supported")
+      ? "Google sign-in popup was blocked by this app window. Close and reopen the Operator, then try again."
+      : message;
   }
 }
 
@@ -537,6 +557,7 @@ async function main(): Promise<void> {
   });
 
   ($("signin-form") as HTMLFormElement).addEventListener("submit", handleSignIn);
+  $("google-signin-btn").addEventListener("click", handleGoogleSignIn);
   $("signout-btn").addEventListener("click", handleSignOut);
   $("relaunch-chrome-btn").addEventListener("click", handleRelaunchChrome);
 

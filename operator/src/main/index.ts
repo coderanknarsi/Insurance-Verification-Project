@@ -116,6 +116,25 @@ async function createMainWindow(): Promise<void> {
 
   await mainWindow.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
 
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const allowed =
+      url.startsWith("https://") &&
+      (/google\./i.test(url) || /firebaseapp\.com/i.test(url));
+    if (!allowed) return { action: "deny" };
+    return {
+      action: "allow",
+      overrideBrowserWindowOptions: {
+        width: 520,
+        height: 720,
+        title: "AutoLien Operator Sign In",
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      },
+    };
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });

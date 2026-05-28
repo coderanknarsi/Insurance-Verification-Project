@@ -72,6 +72,27 @@
         background: #1f242b;
         color: #e7e9ec;
       }
+      button.full {
+        width: 100%;
+        justify-content: center;
+      }
+      .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #6b7280;
+        font-size: 11px;
+        margin: 14px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .auth-divider::before,
+      .auth-divider::after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: #2a2f37;
+      }
       button:hover { filter: brightness(1.1); }
       input {
         width: 100%;
@@ -149,6 +170,8 @@
       <h2>Account</h2>
 
       <div id="signed-out" style="display:none">
+        <button id="google-signin-btn" class="secondary full" type="button">Sign in with Google</button>
+        <div class="auth-divider">or</div>
         <form id="signin-form">
           <div class="field">
             <label for="email">Email</label>
