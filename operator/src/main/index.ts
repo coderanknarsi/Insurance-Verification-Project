@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { createServer, type Server } from "node:http";
 import type { Browser } from "playwright-core";
 import { launchManagedChrome, type ManagedChrome } from "./chrome-launcher";
 import { connectToManagedChrome } from "./cdp";
@@ -20,6 +22,8 @@ import type {
 let mainWindow: BrowserWindow | null = null;
 let managedChrome: ManagedChrome | null = null;
 let browser: Browser | null = null;
+let rendererServer: Server | null = null;
+let rendererUrl: string | null = null;
 const carrierMonitor = new CarrierMonitor();
 const runEngine = new OperatorRunEngine();
 
@@ -44,6 +48,63 @@ function setChromeState(next: ChromeConnectionState): void {
   chromeState = next;
   logger.info("Chrome state changed", next);
   broadcastStatus();
+}
+
+function contentType(filePath: string): string {
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".map":
+      return "application/json; charset=utf-8";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+async function startRendererServer(): Promise<string> {
+  if (rendererUrl) return rendererUrl;
+
+  const rendererDir = path.join(__dirname, "..", "renderer");
+  rendererServer = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
+    const decoded = decodeURIComponent(pathname).replace(/^\/+/, "");
+    const filePath = path.normalize(path.join(rendererDir, decoded));
+
+    if (!filePath.startsWith(rendererDir)) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
+
+    const stream = createReadStream(filePath);
+    stream.on("open", () => {
+      res.writeHead(200, { "Content-Type": contentType(filePath) });
+      stream.pipe(res);
+    });
+    stream.on("error", () => {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not found");
+    });
+  });
+
+  rendererUrl = await new Promise<string>((resolve, reject) => {
+    rendererServer?.once("error", reject);
+    rendererServer?.listen(0, "localhost", () => {
+      const address = rendererServer?.address();
+      if (!address || typeof address === "string") {
+        reject(new Error("Renderer server did not bind to a TCP port"));
+        return;
+      }
+      resolve(`http://localhost:${address.port}/index.html`);
+    });
+  });
+  logger.info("Renderer server started", { url: rendererUrl });
+  return rendererUrl;
 }
 
 async function startManagedChrome(): Promise<void> {
@@ -102,6 +163,8 @@ async function startManagedChrome(): Promise<void> {
 }
 
 async function createMainWindow(): Promise<void> {
+  const localRendererUrl = await startRendererServer();
+
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 720,
@@ -114,7 +177,7 @@ async function createMainWindow(): Promise<void> {
     },
   });
 
-  await mainWindow.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
+  await mainWindow.loadURL(localRendererUrl);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     const allowed =
@@ -223,6 +286,11 @@ async function bootstrap(): Promise<void> {
   void startManagedChrome();
 
   app.on("window-all-closed", () => {
+    if (rendererServer) {
+      rendererServer.close();
+      rendererServer = null;
+      rendererUrl = null;
+    }
     if (managedChrome?.process && !managedChrome.process.killed) {
       try {
         managedChrome.process.kill();
