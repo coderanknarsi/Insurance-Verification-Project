@@ -68,6 +68,58 @@ function asBool(val: unknown): boolean {
 }
 
 /**
+ * The scraper occasionally captures the whole "Policy Details" block in the
+ * policy-number field (e.g. "0456960-SFP-15\n\nPolicy Origin Date\n02/28/2026
+ * ..."). Keep only the first line and trim trailing label noise so the stored
+ * policy number is just the identifier (e.g. "0456960-SFP-15").
+ */
+function cleanPolicyNumber(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const firstLine = String(raw).split(/[\r\n\t]/)[0]?.trim();
+  return firstLine || undefined;
+}
+
+/**
+ * Normalize a date string to `YYYY-MM-DD`. The portal (and OCR) return dates in
+ * a variety of human formats — most commonly `MM/DD/YYYY` (e.g. "02/28/2026").
+ * The frontend parses dates strictly as `new Date("YYYY-MM-DD" + "T00:00:00")`,
+ * so any other format renders as "Invalid Date". Returns undefined if the input
+ * can't be parsed into a real calendar date.
+ */
+export function toIsoDate(raw: unknown): string | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const s = String(raw).trim();
+  if (!s) return undefined;
+
+  // Already ISO (YYYY-MM-DD, optionally with time) — keep the date part.
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return `${y}-${m}-${d}`;
+  }
+
+  // MM/DD/YYYY or M/D/YYYY (also accepts '-' or '.' separators).
+  const usMatch = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
+  if (usMatch) {
+    const mm = usMatch[1].padStart(2, "0");
+    const dd = usMatch[2].padStart(2, "0");
+    const yyyy = usMatch[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Fallback: let Date parse textual forms like "Feb 28, 2026".
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+    const dd = String(parsed.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return undefined;
+}
+
+/**
  * Convert State Farm scraped fields into a `ParsedInsuranceRecord` and
  * compute the compliance/dashboard derivations the rest of the app reads.
  */
@@ -111,19 +163,19 @@ export function normalizeStateFarmScrape(
   const isLienholderListed =
     interestedParties.length > 0 && lossPaye === "yes";
 
-  const coveragePeriod: CoveragePeriod | undefined =
-    scraped.policyOriginDate && scraped.policyEffectiveDate
-      ? {
-          startDate: String(scraped.policyOriginDate),
-          endDate: String(scraped.policyEffectiveDate),
-        }
-      : undefined;
+  // State Farm's B2B Policy Information page reports the term START via
+  // "Policy Effective Date" (and an earlier "Policy Origin Date") but does NOT
+  // expose a term EXPIRATION date. Do not fabricate an endDate from the
+  // effective date — that produced a bogus past endDate and a false
+  // "Coverage Expired" flag. Policy currency is driven by `status` instead.
+  const startDate = toIsoDate(scraped.policyEffectiveDate || scraped.policyOriginDate);
+  const coveragePeriod: CoveragePeriod | undefined = startDate
+    ? { startDate }
+    : undefined;
 
   const parsed: ParsedInsuranceRecord = {
     status,
-    policyNumber: scraped.policyNumber
-      ? String(scraped.policyNumber)
-      : undefined,
+    policyNumber: cleanPolicyNumber(scraped.policyNumber),
     policyTypes: ["AUTO"],
     coveragePeriod,
     coverages,

@@ -1,4 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
+import { logger } from "firebase-functions/v2";
+import { Timestamp } from "firebase-admin/firestore";
 import { collections } from "../config/firestore";
 import { db } from "../config/firebase";
 import { requireAuth, requireOrg } from "../middleware/auth";
@@ -8,6 +11,45 @@ import {
   normalizeCarrier,
   VerificationState,
 } from "../services/verification-eligibility";
+
+const CARD_URL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Insurance-card images are served via short-lived signed URLs. The URL stored
+ * on the policy at upload time expires after 7 days, after which the link
+ * returns an ExpiredToken error. Regenerate a fresh URL on demand from the
+ * persisted storage path whenever the cached one is missing or near expiry.
+ */
+async function refreshCardUrl(policy: Record<string, unknown>): Promise<void> {
+  const path = policy.insuranceCardPath as string | undefined;
+  if (!path) return;
+
+  const expiresAt = policy.insuranceCardUrlExpiresAt as Timestamp | undefined;
+  const expiresMs = expiresAt?.toMillis?.() ?? 0;
+  // Refresh if expired or expiring within a day, or if no URL is cached.
+  if (policy.insuranceCardUrl && expiresMs - Date.now() > 24 * 60 * 60 * 1000) {
+    return;
+  }
+
+  try {
+    const file = admin.storage().bucket("insurance-track-os-cards").file(path);
+    const [signedUrl] = await file.getSignedUrl({
+      action: "read",
+      expires: Date.now() + CARD_URL_TTL_MS,
+    });
+    policy.insuranceCardUrl = signedUrl;
+    // Persist so subsequent reads reuse the fresh URL until it nears expiry.
+    await collections.policies.doc(policy.id as string).update({
+      insuranceCardUrl: signedUrl,
+      insuranceCardUrlExpiresAt: Timestamp.fromMillis(Date.now() + CARD_URL_TTL_MS),
+    });
+  } catch (err) {
+    logger.warn("[get-borrowers] failed to refresh insurance card URL", {
+      policyId: policy.id,
+      err: String(err),
+    });
+  }
+}
 
 interface GetBorrowersInput {
   organizationId: string;
@@ -84,6 +126,11 @@ export const getBorrowers = onCall(async (request) => {
           // Backfill complianceIssues for UNVERIFIED policies missing the field
           if (policy && policy.status === PolicyStatus.UNVERIFIED && (!policy.complianceIssues || policy.complianceIssues.length === 0)) {
             policy.complianceIssues = [ComplianceIssue.UNVERIFIED];
+          }
+
+          // Keep the insurance-card link alive (regenerate if expired).
+          if (policy) {
+            await refreshCardUrl(policy as unknown as Record<string, unknown>);
           }
 
           const verificationState = policy

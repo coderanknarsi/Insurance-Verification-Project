@@ -5,7 +5,7 @@ import { db } from "../config/firebase";
 import { collections } from "../config/firestore";
 import { requireAuth, requireRole, requireOrg, isSuperAdmin } from "../middleware/auth";
 import { UserRole } from "../types/user";
-import { PolicyStatus } from "../types/policy";
+import { PolicyStatus, ComplianceIssue, DashboardStatus } from "../types/policy";
 import {
   getPolicyVerificationState,
   normalizeCarrier,
@@ -13,6 +13,7 @@ import {
 } from "../services/verification-eligibility";
 import {
   normalizeStateFarmScrape,
+  toIsoDate,
   type StateFarmScrapedPolicy,
 } from "../services/state-farm-normalize";
 import type { VerificationInput } from "./data-feed-types";
@@ -258,18 +259,53 @@ export const recordManualSweepResult = onCall(
         normalizeStateFarmScrape(data.scraped!, rules);
       parsedStatus = parsed.status;
 
+      // The carrier portal frequently omits an expiration date, but the
+      // borrower's uploaded insurance card (parsed via OCR at intake) usually
+      // carries both effective and expiration dates. Preserve the existing
+      // end date so a portal sweep never erases a real expiration.
+      const existingPeriod = policy.coveragePeriod as
+        | { startDate?: string; endDate?: string }
+        | undefined;
+      const existingEndDate = toIsoDate(existingPeriod?.endDate);
+      const mergedPeriod = parsed.coveragePeriod
+        ? {
+            ...parsed.coveragePeriod,
+            ...(parsed.coveragePeriod.endDate
+              ? {}
+              : existingEndDate
+                ? { endDate: existingEndDate }
+                : {}),
+          }
+        : existingPeriod;
+
+      let finalComplianceIssues = complianceIssues;
+      let finalDashboardStatus = dashboardStatus;
+      // If the preserved (card-sourced) expiration is in the past, surface it.
+      if (
+        mergedPeriod?.endDate &&
+        new Date(mergedPeriod.endDate).getTime() < Date.now() &&
+        !finalComplianceIssues.includes(ComplianceIssue.COVERAGE_EXPIRED)
+      ) {
+        finalComplianceIssues = [
+          ...finalComplianceIssues,
+          ComplianceIssue.COVERAGE_EXPIRED,
+        ];
+        finalDashboardStatus = DashboardStatus.RED;
+      }
+
       const policyUpdate: Record<string, unknown> = {
         status: parsed.status,
         policyStatus: parsed.status,
         verificationSource: "manual-operator",
         lastVerifiedAt: FieldValue.serverTimestamp(),
+        lastVerificationError: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
-        complianceIssues,
-        dashboardStatus,
+        complianceIssues: finalComplianceIssues,
+        dashboardStatus: finalDashboardStatus,
         isLienholderListed: parsed.isLienholderListed,
       };
       if (parsed.policyNumber) policyUpdate.policyNumber = parsed.policyNumber;
-      if (parsed.coveragePeriod) policyUpdate.coveragePeriod = parsed.coveragePeriod;
+      if (mergedPeriod) policyUpdate.coveragePeriod = mergedPeriod;
       if (parsed.coverages.length > 0) policyUpdate.coverages = parsed.coverages;
       if (parsed.interestedParties.length > 0)
         policyUpdate.interestedParties = parsed.interestedParties;
@@ -277,9 +313,14 @@ export const recordManualSweepResult = onCall(
       batch.update(policyRef, policyUpdate);
       batch.update(runRef, { successCount: FieldValue.increment(1) });
     } else {
+      // A failed sweep must NOT stamp lastVerifiedAt — doing so would light up
+      // the "Verified" badge (state INSURED_SUPPORTED + lastVerifiedAt) while
+      // the provisional UNVERIFIED ("Pending Verification") issue is still
+      // present, producing a contradictory "Verified + Pending Verification"
+      // state. Record the attempt + error only; leave verification status as-is.
       batch.update(policyRef, {
         verificationSource: "manual-operator",
-        lastVerifiedAt: FieldValue.serverTimestamp(),
+        lastVerificationAttempt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         lastVerificationError: data.error ?? "Unknown error",
       });

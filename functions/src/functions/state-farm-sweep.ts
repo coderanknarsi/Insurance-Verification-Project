@@ -214,6 +214,7 @@ export const recordStateFarmSweepResult = onCall(
         insuranceProvider: "State Farm",
         verificationSource: "manual-extension",
         lastVerifiedAt: FieldValue.serverTimestamp(),
+        lastVerificationError: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
         complianceIssues,
         dashboardStatus,
@@ -228,10 +229,12 @@ export const recordStateFarmSweepResult = onCall(
       batch.update(policyRef, policyUpdate);
       batch.update(runRef, { successCount: FieldValue.increment(1) });
     } else {
-      // Still record the failure on the policy so the dashboard reflects it.
+      // Record the failure without stamping lastVerifiedAt — a failed sweep
+      // must not light up the "Verified" badge while the provisional
+      // UNVERIFIED ("Pending Verification") issue is still present.
       batch.update(policyRef, {
         verificationSource: "manual-extension",
-        lastVerifiedAt: FieldValue.serverTimestamp(),
+        lastVerificationAttempt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         lastVerificationError: data.error ?? "Unknown error",
       });

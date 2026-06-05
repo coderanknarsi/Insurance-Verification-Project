@@ -198,7 +198,7 @@ function IntakePageInner() {
     const hasCard = !!cardFile;
 
     if (!hasTextFields && !hasCard) {
-      setErrorMsg("Please enter your insurance information or upload a photo of your insurance card.");
+      setErrorMsg("Please enter your insurance information or upload a photo of your insurance card or declaration page.");
       return;
     }
 
@@ -394,7 +394,7 @@ function IntakePageInner() {
 
                 {/* Insurance Card Upload */}
                 <div className="space-y-2">
-                  <Label className="text-zinc-300">Insurance Card Photo</Label>
+                  <Label className="text-zinc-300">Insurance Card or Declaration Page</Label>
                   <input
                     ref={fileInputRef}
                     type="file"

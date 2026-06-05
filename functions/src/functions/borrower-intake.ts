@@ -9,6 +9,7 @@ import { UserRole } from "../types/user";
 import { ComplianceIssue, PolicyStatus, DashboardStatus, CoverageItem, CoverageDeductible, Policy } from "../types/policy";
 import { SmsConsentStatus } from "../types/borrower";
 import { extractInsuranceFromImage, ExtractedInsuranceData } from "../services/insurance-ocr";
+import { toIsoDate } from "../services/state-farm-normalize";
 import { sendSms, intakeRequestSmsText, isWithinSendingHours } from "../services/telnyx";
 import { sendIntakeRequestEmail, sendIntakeReviewEmail } from "../services/email";
 import { validateIntakeSubmission, type ValidationIssue } from "../services/intake-validation";
@@ -74,10 +75,11 @@ function applyOcrToPolicy(
     policyUpdate.policyNumber = extracted.policyNumber;
   }
   if (extracted.effectiveDate && extracted.expirationDate) {
-    policyUpdate.coveragePeriod = {
-      startDate: extracted.effectiveDate,
-      endDate: extracted.expirationDate,
-    };
+    const startDate = toIsoDate(extracted.effectiveDate);
+    const endDate = toIsoDate(extracted.expirationDate);
+    if (startDate && endDate) {
+      policyUpdate.coveragePeriod = { startDate, endDate };
+    }
   }
   if (extracted.insuredName) policyUpdate.ocrInsuredName = extracted.insuredName;
   if (extracted.vin) policyUpdate.ocrVin = extracted.vin;

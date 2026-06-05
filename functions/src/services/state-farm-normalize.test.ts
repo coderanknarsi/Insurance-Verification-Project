@@ -25,8 +25,7 @@ describe("normalizeStateFarmScrape", () => {
     assert.equal(r.parsed.isLienholderListed, true);
     assert.equal(r.parsed.interestedParties[0].name, "Big Bank");
     assert.deepEqual(r.parsed.coveragePeriod, {
-      startDate: "2025-01-01",
-      endDate: "2099-01-01",
+      startDate: "2099-01-01",
     });
     assert.ok(r.parsed.coverages.find((c) => c.type === "Collision"));
     assert.ok(r.parsed.coverages.find((c) => c.type === "Comprehensive"));
@@ -90,5 +89,34 @@ describe("normalizeStateFarmScrape", () => {
     });
     assert.ok(r.parsed.coverages.find((c) => c.type === "Collision"));
     assert.ok(r.parsed.coverages.find((c) => c.type === "Comprehensive"));
+  });
+
+  it("cleans a policy number polluted with the Policy Details block", () => {
+    const r = normalizeStateFarmScrape({
+      policyNumber:
+        "0456960-SFP-15\n\n\nPolicy Origin Date\n\t\n02/28/2026\n\n\nPolicy Status\n\t\nActive",
+      policyStatus: "Active",
+      policyEffectiveDate: "02/28/2026",
+    });
+    assert.equal(r.parsed.policyNumber, "0456960-SFP-15");
+  });
+
+  it("does not flag COVERAGE_EXPIRED when only an effective date is present", () => {
+    const r = normalizeStateFarmScrape({
+      policyStatus: "Active",
+      policyOriginDate: "02/28/2026",
+      policyEffectiveDate: "02/28/2026",
+    });
+    assert.equal(r.parsed.coveragePeriod?.endDate, undefined);
+    assert.ok(!r.complianceIssues.includes(ComplianceIssue.COVERAGE_EXPIRED));
+    assert.ok(!r.complianceIssues.includes(ComplianceIssue.POLICY_EXPIRED));
+  });
+
+  it("normalizes a MM/DD/YYYY effective date to ISO YYYY-MM-DD", () => {
+    const r = normalizeStateFarmScrape({
+      policyStatus: "Active",
+      policyEffectiveDate: "02/28/2026",
+    });
+    assert.equal(r.parsed.coveragePeriod?.startDate, "2026-02-28");
   });
 });

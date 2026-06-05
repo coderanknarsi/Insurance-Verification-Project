@@ -372,7 +372,7 @@ function intakeRequestEmailHtml(
     </div>
     <p style="margin:0 0 16px;font-size:14px;color:#8b9dc3;line-height:1.6;">
       Click the button below to securely submit your insurance details. It only takes a minute &mdash;
-      just enter your <strong style="color:#ffffff;">carrier name and policy number</strong>, or upload a photo of your insurance card.
+      just enter your <strong style="color:#ffffff;">carrier name and policy number</strong>, or upload a photo of your insurance card or declaration page.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       <tr><td style="background:#3b82f6;border-radius:10px;">

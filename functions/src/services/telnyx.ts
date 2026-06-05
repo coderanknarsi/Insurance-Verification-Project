@@ -188,7 +188,7 @@ export function intakeRequestSmsText(
 ): string {
   return (
     `${dealershipName}: Hi ${borrowerName}, please send us your insurance info ` +
-    `for your ${vehicleLabel}. Tap to enter your carrier + policy # or upload a photo of your card: ${intakeUrl}\n\n` +
+    `for your ${vehicleLabel}. Tap to enter your carrier + policy # or upload a photo of your insurance card or declaration page: ${intakeUrl}\n\n` +
     `Need help? Reply HELP or call us. Reply STOP to opt out.`
   );
 }

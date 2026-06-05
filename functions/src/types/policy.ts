@@ -36,7 +36,7 @@ export enum ComplianceIssue {
 
 export interface CoveragePeriod {
   startDate: string;
-  endDate: string;
+  endDate?: string;
 }
 
 export interface Coverage {
