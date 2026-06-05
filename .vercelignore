@@ -1,0 +1,29 @@
+# Vercel only builds the `frontend` Root Directory. Everything below is
+# excluded from the CLI upload so the source tarball stays under the 100 MB cap.
+# Vercel reinstalls dependencies and rebuilds on its own servers, so local
+# node_modules / build outputs never need to be uploaded.
+#
+# NOTE: keep patterns conservative. Do NOT use broad globs like **/lib/ —
+# that would wrongly exclude frontend/src/lib (app source code).
+
+# Sibling monorepo projects not built by this Vercel project
+operator/
+engine/
+landing/
+functions/
+extension/
+docs/
+
+# Dependencies (reinstalled on Vercel)
+node_modules/
+**/node_modules/
+
+# Frontend build output (rebuilt on Vercel)
+frontend/.next/
+frontend/out/
+
+# Logs and local scratch files
+*.log
+logs*.txt
+*-output.txt
+captured-*.json
