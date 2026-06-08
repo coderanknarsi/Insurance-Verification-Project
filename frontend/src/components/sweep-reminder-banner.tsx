@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Zap, X } from "lucide-react";
+import { ShieldCheck, X } from "lucide-react";
 import {
   callGetSweepReminder,
   callAcknowledgeSweepReminder,
@@ -10,13 +10,9 @@ import {
 
 interface SweepReminderBannerProps {
   organizationId: string;
-  onSweepNow: () => void;
 }
 
-export function SweepReminderBanner({
-  organizationId,
-  onSweepNow,
-}: SweepReminderBannerProps) {
+export function SweepReminderBanner({ organizationId }: SweepReminderBannerProps) {
   const [reminder, setReminder] = useState<SweepReminder | null>(null);
   const [dismissing, setDismissing] = useState(false);
 
@@ -51,46 +47,38 @@ export function SweepReminderBanner({
     parts.push(
       `${reminder.operatorReadyCount} ${
         reminder.operatorReadyCount === 1 ? "policy" : "policies"
-      } ready to verify`
+      } being verified automatically`
     );
   }
   if (reminder.manualCount > 0) {
-    parts.push(`${reminder.manualCount} need manual verification`);
+    parts.push(`${reminder.manualCount} awaiting manual confirmation below`);
   }
 
   return (
     <div className="flex items-center justify-between gap-4 bg-accent/10 border border-accent/25 rounded-2xl px-5 py-4">
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-9 h-9 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
-          <Zap className="w-4 h-4 text-accent" />
+          <ShieldCheck className="w-4 h-4 text-accent" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-offwhite">
-            It&apos;s your weekly sweep day
+            Your portfolio is being verified today
           </p>
           <p className="text-xs text-carbon-light truncate">
             {parts.length > 0
-              ? parts.join(" · ")
-              : "Open the operator, log into your portals, and run a sweep."}
+              ? `AutoLien is running your weekly sweep — ${parts.join(" · ")}.`
+              : "AutoLien runs your weekly verification sweep today — results will update automatically."}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          onClick={onSweepNow}
-          className="text-sm font-medium px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white transition-colors"
-        >
-          Sweep now
-        </button>
-        <button
-          onClick={handleDismiss}
-          disabled={dismissing}
-          aria-label="Dismiss"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-carbon-light hover:text-offwhite hover:bg-white/[0.06] transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+      <button
+        onClick={handleDismiss}
+        disabled={dismissing}
+        aria-label="Dismiss"
+        className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-carbon-light hover:text-offwhite hover:bg-white/[0.06] transition-colors"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   );
 }

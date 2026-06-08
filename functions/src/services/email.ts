@@ -505,7 +505,7 @@ export async function sendTeamInviteEmail(
 
 // ─── Admin alert emails ─────────────────────────────────────────
 
-const ADMIN_EMAIL = "anknarsi@gmail.com";
+export const ADMIN_EMAIL = "anknarsi@gmail.com";
 
 function adminAlertHtml(title: string, details: string): string {
   return layoutHtml(`
@@ -591,8 +591,8 @@ export async function sendSweepReminderEmail(input: {
   manualCount: number;
   dashboardUrl: string;
 }): Promise<EmailResult> {
-  const subject = "It's your weekly insurance sweep day";
-  const title = "Time to run your portfolio sweep";
+  const subject = `Weekly sweep due — ${input.dealershipName}`;
+  const title = `${input.dealershipName} is due for its weekly sweep`;
   const readyLine =
     input.operatorReadyCount > 0
       ? `<p style="margin:0 0 12px;"><strong>${input.operatorReadyCount}</strong> ${
@@ -602,14 +602,14 @@ export async function sendSweepReminderEmail(input: {
   const manualLine =
     input.manualCount > 0
       ? `<p style="margin:0 0 16px;"><strong>${input.manualCount}</strong> ${
-          input.manualCount === 1 ? "policy needs" : "policies need"
-        } manual verification (unsupported carriers).</p>`
+          input.manualCount === 1 ? "policy" : "policies"
+        } will be left for the dealer to verify manually (unsupported carriers).</p>`
       : "";
   const details = `
     ${readyLine}
     ${manualLine}
-    <p style="margin:0 0 12px;">Open the <strong>AutoLien Operator</strong>, log into your carrier portals, then click <strong>Sweep Portfolio</strong> in the dashboard to verify your whole book in one pass.</p>
-    <p style="margin:0;"><a href="${input.dashboardUrl}" style="color:#3b82f6;">Open dashboard →</a></p>
+    <p style="margin:0 0 12px;">Open the <strong>AutoLien Operator</strong>, log into the carrier portals, then click <strong>Sweep Portfolio</strong> for this dealership in the admin dashboard.</p>
+    <p style="margin:0;"><a href="${input.dashboardUrl}" style="color:#3b82f6;">Open admin dashboard →</a></p>
   `;
   const resend = getResend();
   const { data, error } = await resend.emails.send({

@@ -448,10 +448,7 @@ export default function Home() {
 
           {activeNav === "dashboard" && organizationId && (
             <>
-              <SweepReminderBanner
-                organizationId={organizationId}
-                onSweepNow={() => setActiveNav("verifications")}
-              />
+              <SweepReminderBanner organizationId={organizationId} />
               <DashboardHeaderStrip organizationId={organizationId} />
               <DashboardSummary
                 organizationId={organizationId}

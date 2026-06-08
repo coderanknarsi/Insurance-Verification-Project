@@ -1,0 +1,208 @@
+{
+  "startedAt": "2026-06-07T15:56:39.947Z",
+  "token": {
+    "capturedAt": "2026-06-07T16:33:27.480Z",
+    "redacted": "…5PtI3Q (len=651)",
+    "tokenType": "Bearer",
+    "expiresIn": 299
+  },
+  "storageTokenKeys": [],
+  "calls": [
+    {
+      "ts": "2026-06-07T16:01:02.414Z",
+      "method": "PUT",
+      "url": "https://api.progressive.com/ProveAPI/v1/accounts/lastlogindate",
+      "status": 200,
+      "reqHeaders": {
+        "api_key": "69fc6eb45aae482c82567101c6bc67f5",
+        "x-pgrclient": "PROVE",
+        "authorization": "Bearer …Bi5ISg (len=651)",
+        "referer": "https://prove.progressive.com/",
+        "origin": "https://prove.progressive.com",
+        "content-type": "application/json"
+      },
+      "reqBody": {
+        "userId": "autoLT"
+      },
+      "resBody": ""
+    },
+    {
+      "ts": "2026-06-07T16:01:26.364Z",
+      "method": "POST",
+      "url": "https://api.progressive.com/ProveAPI/v1/vehicles",
+      "status": 404,
+      "reqHeaders": {
+        "api_key": "69fc6eb45aae482c82567101c6bc67f5",
+        "x-pgrclient": "PROVE",
+        "authorization": "Bearer …Bi5ISg (len=651)",
+        "referer": "https://prove.progressive.com/",
+        "origin": "https://prove.progressive.com",
+        "content-type": "application/json"
+      },
+      "reqBody": {
+        "RiskCode": "AU",
+        "FullVinNumber": "5TDKK3DC9ES477474"
+      },
+      "resBody": {
+        "errorCode": "1205",
+        "developerMessage": "Bad Request",
+        "displayMessage": "Hmm, we couldn’t find a policy that matches the info you provided. Please try again."
+      }
+    },
+    {
+      "ts": "2026-06-07T16:05:20.178Z",
+      "method": "POST",
+      "url": "https://api.progressive.com/ProveAPI/v1/vehicles",
+      "status": 404,
+      "reqHeaders": {
+        "api_key": "69fc6eb45aae482c82567101c6bc67f5",
+        "x-pgrclient": "PROVE",
+        "authorization": "Bearer …Bi5ISg (len=651)",
+        "referer": "https://prove.progressive.com/",
+        "origin": "https://prove.progressive.com",
+        "content-type": "application/json"
+      },
+      "reqBody": {
+        "RiskCode": "AU",
+        "FullVinNumber": "5TDKK3DC9ES477474"
+      },
+      "resBody": {
+        "errorCode": "1205",
+        "developerMessage": "Bad Request",
+        "displayMessage": "Hmm, we couldn’t find a policy that matches the info you provided. Please try again."
+      }
+    },
+    {
+      "ts": "2026-06-07T16:07:51.572Z",
+      "method": "POST",
+      "url": "https://api.progressive.com/ProveAPI/v1/vehicles",
+      "status": 401,
+      "reqHeaders": {
+        "api_key": "69fc6eb45aae482c82567101c6bc67f5",
+        "x-pgrclient": "PROVE",
+        "authorization": "Bearer …Bi5ISg (len=651)",
+        "referer": "https://prove.progressive.com/",
+        "origin": "https://prove.progressive.com",
+        "content-type": "application/json"
+      },
+      "reqBody": {
+        "RiskCode": "AU",
+        "FullVinNumber": "1FMCU9GD8HUB90368"
+      },
+      "resBody": {
+        "errorCode": "Unauthorized",
+        "developerMessage": "Access denied. Token expired.",
+        "displayMessage": "Access denied"
+      }
+    },
+    {
+      "ts": "2026-06-07T16:07:54.369Z",
+      "method": "POST",
+      "url": "https://api.progressive.com/ProveAPI/v1/vehicles",
+      "status": 200,
+      "reqHeaders": {
+        "api_key": "69fc6eb45aae482c82567101c6bc67f5",
+        "x-pgrclient": "PROVE",
+        "authorization": "Bearer …oYzX1w (len=651)",
+        "referer": "https://prove.progressive.com/",
+        "origin": "https://prove.progressive.com",
+        "content-type": "application/json"
+      },
+      "reqBody": {
+        "RiskCode": "AU",
+        "FullVinNumber": "1FMCU9GD8HUB90368"
+      },
+      "resBody": {
+        "accountSessionId": "5b334fab-04f8-4a69-83cc-b0959c40ff04",
+        "sessionDataLocation": "BunkerEast",
+        "policies": {
+          "number": "875204209",
+          "riskCode": "AA",
+          "effectiveDate": "6/5/2026",
+          "policyInfoKey": "IA-AA",
+          "status": "Active",
+          "transactionAvailability": {
+            "canProcessEndorsement": true
+          },
+          "primaryNamedInsured": {
+            "name": "Octavious Piercy-Maze"
+          },
+          "coverages": [
+            {
+              "name": "BIPD",
+              "label": "Bodily Injury & Property Damage Liability",
+              "description": "$100,000 each person/$300,000 each accident/$100,000 each accident"
+            },
+            {
+              "name": "COMP",
+              "label": "Comprehensive deductible",
+              "description": "$500 deductible"
+            },
+            {
+              "name": "COLL",
+              "label": "Collision deductible",
+              "description": "$500 deductible"
+            }
+          ],
+          "vehicles": {
+            "vin": "1FMCU9GD8HUB90368",
+            "modelYear": "2017",
+            "make": "FORD",
+            "model": "ESCAPE",
+            "vehicleCohortDate": "06/05/2026",
+            "vehicleLienholders": [
+              {
+                "lienholderName": "BEST AUTO, INC.",
+                "lienholderAddressLineOne": "900 S GRAND AVE",
+                "lienholderAddressLineTwo": "",
+                "lienholderAddressCity": "SPENCER",
+                "lienholderAddressState": "IA",
+                "lienholderAddressZip": "51301",
+                "lienholderCode": "0001",
+                "id": "0"
+              }
+            ],
+            "vehicleAdditionalInterest": []
+          },
+          "drivers": [
+            {
+              "name": "Octavious Piercy-Maze",
+              "status": "Insured driver (Includes permit driver)"
+            }
+          ],
+          "termDetails": [
+            {
+              "termDetailRenewalCounter": "0",
+              "termDetailEffectiveDate": "6/5/2026",
+              "termDetailExpirationDate": "12/5/2026",
+              "termDetailStatusDisplay": "Active"
+            }
+          ]
+        },
+        "agents": {
+          "name": "HEARTLAND INSURANCE ASSOCIATES",
+          "phoneNumber": "712-732-6691"
+        },
+        "alerts": []
+      }
+    },
+    {
+      "ts": "2026-06-07T16:33:29.893Z",
+      "method": "PUT",
+      "url": "https://api.progressive.com/ProveAPI/v1/accounts/lastlogindate",
+      "status": 200,
+      "reqHeaders": {
+        "api_key": "69fc6eb45aae482c82567101c6bc67f5",
+        "x-pgrclient": "PROVE",
+        "authorization": "Bearer …5PtI3Q (len=651)",
+        "referer": "https://prove.progressive.com/",
+        "origin": "https://prove.progressive.com",
+        "content-type": "application/json"
+      },
+      "reqBody": {
+        "userId": "autoLT"
+      },
+      "resBody": ""
+    }
+  ]
+}

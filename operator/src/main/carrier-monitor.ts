@@ -134,21 +134,50 @@ export class CarrierMonitor {
     const context = this.firstContext(this.browser);
     if (!context) throw new Error("No browser context available");
 
-    // Use a dedicated probe page so we don't disturb the user's tabs.
-    const page = await context.newPage();
-    try {
-      const ok = await Promise.race<boolean>([
-        adapter.isLoggedIn(page),
-        timeout<boolean>(HEARTBEAT_TIMEOUT_MS, "heartbeat timed out"),
-      ]);
-      return { ok };
-    } finally {
+    // Read-only heartbeat: inspect a tab the user already has open for this
+    // carrier instead of spawning a throwaway probe tab. Opening and closing a
+    // tab on every poll caused visible tab flicker and could hijack the user's
+    // session-scoped portal tab (State Farm's Insurance Inquiry runs on a
+    // per-session host). If the user has no tab open for this carrier, they are
+    // — for sweep purposes — not logged in, so we report that without opening
+    // anything. The login gate opens a real login tab when a sweep needs one.
+    const page = this.findCarrierTab(context, adapter);
+    if (!page) return { ok: false };
+
+    const ok = await Promise.race<boolean>([
+      adapter.isLoggedIn(page),
+      timeout<boolean>(HEARTBEAT_TIMEOUT_MS, "heartbeat timed out"),
+    ]);
+    return { ok };
+  }
+
+  /**
+   * Finds an existing tab that belongs to a carrier without opening one.
+   * Prefers a tab already on the carrier's search/verification page, then any
+   * tab on the carrier's registrable domain (covers multi-host portals such as
+   * State Farm's apps.b2b / lenders.apps / b2b hosts).
+   */
+  private findCarrierTab(
+    context: BrowserContext,
+    adapter: CarrierAdapter,
+  ): Page | null {
+    const domain = registrableDomain(adapter.loginUrl);
+    let domainMatch: Page | null = null;
+    for (const p of context.pages()) {
+      let url = "";
       try {
-        await page.close({ runBeforeUnload: false });
-      } catch (err) {
-        logger.warn("Failed to close heartbeat page", { error: String(err) });
+        url = p.url();
+      } catch {
+        continue;
+      }
+      if (adapter.searchPageFragment && url.includes(adapter.searchPageFragment)) {
+        return p;
+      }
+      if (domain && url.includes(domain) && !domainMatch) {
+        domainMatch = p;
       }
     }
+    return domainMatch;
   }
 
   async openLogin(carrierId: string): Promise<void> {
@@ -198,4 +227,15 @@ export class CarrierMonitor {
 
 function timeout<T>(ms: number, msg: string): Promise<T> {
   return new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms));
+}
+
+/** Best-effort registrable domain (last two labels) of a URL's host. */
+function registrableDomain(rawUrl: string): string {
+  try {
+    const host = new URL(rawUrl).hostname;
+    const parts = host.split(".");
+    return parts.length >= 2 ? parts.slice(-2).join(".") : host;
+  } catch {
+    return "";
+  }
 }

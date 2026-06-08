@@ -12,6 +12,23 @@ const SEARCH_URL =
   "https://apps.b2b.statefarm.com/b2b/InsuranceInquiry/policySearch";
 const SEARCH_URL_FRAGMENT = "InsuranceInquiry/policySearch";
 const LOGIN_URL_FRAGMENT = "/login";
+// Hosts/paths that mean the session is NOT established. An unauthenticated (or
+// expired) request to the search page is bounced through State Farm's CIAM
+// single sign-on (Azure Entra External ID) at *.ciamlogin.com — the "Pick an
+// account" screen — which contains neither "/login" nor the search fragment, so
+// it must be detected explicitly.
+const AUTH_URL_FRAGMENTS = [
+  "ciamlogin.com",
+  "login.microsoftonline.com",
+  "/oauth2/",
+  "/authorize",
+  LOGIN_URL_FRAGMENT,
+];
+
+function isAuthRedirectUrl(url: string): boolean {
+  if (url.includes(SEARCH_URL_FRAGMENT)) return false;
+  return AUTH_URL_FRAGMENTS.some((frag) => url.includes(frag));
+}
 
 const STEP_TIMEOUT_MS = 25_000;
 
@@ -105,7 +122,7 @@ async function ensureOnSearch(page: Page): Promise<boolean> {
   // never force-navigate to a hardcoded URL. We only confirm the current tab
   // is the search page and has the VIN field ready.
   const url = page.url();
-  if (url.includes(LOGIN_URL_FRAGMENT) && !url.includes(SEARCH_URL_FRAGMENT)) {
+  if (isAuthRedirectUrl(url)) {
     return false;
   }
   try {
@@ -377,22 +394,24 @@ export const stateFarmAdapter: CarrierAdapter = {
   searchPageFragment: SEARCH_URL_FRAGMENT,
 
   async isLoggedIn(page: Page): Promise<boolean> {
+    // Read-only: never navigate. The monitor passes a tab the user already has
+    // open on a State Farm host. We're logged in if that tab is either the
+    // Insurance Inquiry search tool (#vinID present) or the authenticated B2B
+    // portal (a "Log out" control is present), and is not sitting on the
+    // CIAM / Entra single sign-on ("Pick an account") screen.
+    let url = "";
     try {
-      await page.goto(SEARCH_URL, {
-        waitUntil: "domcontentloaded",
-        timeout: 20_000,
-      });
+      url = page.url();
     } catch {
       return false;
     }
-    const url = page.url();
-    if (url.includes(LOGIN_URL_FRAGMENT) && !url.includes(SEARCH_URL_FRAGMENT)) {
-      return false;
-    }
-    if (url.includes(SEARCH_URL_FRAGMENT)) return true;
+    if (isAuthRedirectUrl(url)) return false;
     try {
-      const vinInput = await page.$('input[name="vin"], #vinID');
-      return Boolean(vinInput);
+      return await page.evaluate(() => {
+        if (document.querySelector("#vinID")) return true;
+        const text = document.body?.innerText ?? "";
+        return /\blog\s?out\b/i.test(text);
+      });
     } catch {
       return false;
     }

@@ -8,7 +8,7 @@ import {
   callGetAdminDashboard,
   callGetAdminOrgDetail,
   callDeleteOrganization,
-  callSimulateVerificationSweep,
+  callStartPortfolioSweep,
   callSaveMasterCredential,
   callGetMasterCredentials,
   callDeleteMasterCredential,
@@ -16,7 +16,7 @@ import {
   type AdminOrgSummary,
   type AdminOrgDetailData,
   type CarrierCredentialMeta,
-  type SimulateVerificationSweepResult,
+  type StartPortfolioSweepResult,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,27 +92,6 @@ const DASHBOARD_STATUS_COLORS: Record<string, string> = {
   RED: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
-function getSweepResultBanner(result: SimulateVerificationSweepResult) {
-  if (result.errorCount > 0 && result.successCount === 0) {
-    return {
-      label: "Sweep finished with errors",
-      className: "bg-red-500/10 text-red-400 border border-red-500/20",
-    };
-  }
-
-  if (result.errorCount > 0) {
-    return {
-      label: "Sweep partially completed",
-      className: "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
-    };
-  }
-
-  return {
-    label: "Sweep completed",
-    className: "bg-green-500/10 text-green-400 border border-green-500/20",
-  };
-}
-
 export default function AdminDashboard() {
   const router = useRouter();
   const [data, setData] = useState<AdminDashboardData | null>(null);
@@ -131,8 +110,10 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [simulatingOrgId, setSimulatingOrgId] = useState<string | null>(null);
-  const [sweepResult, setSweepResult] = useState<SimulateVerificationSweepResult | null>(null);
+  const [portfolioSweepingOrgId, setPortfolioSweepingOrgId] = useState<string | null>(null);
+  const [portfolioResult, setPortfolioResult] = useState<
+    (StartPortfolioSweepResult & { orgName: string }) | null
+  >(null);
   const [stateFarmTarget, setStateFarmTarget] = useState<{ id: string; name: string } | null>(null);
 
   const handleDeleteOrg = async () => {
@@ -165,22 +146,17 @@ export default function AdminDashboard() {
     }
   }, []);
 
-  const handleSimulateSweep = async (orgId: string) => {
-    setSimulatingOrgId(orgId);
-    setSweepResult(null);
+  const handlePortfolioSweep = async (orgId: string, orgName: string) => {
+    setPortfolioSweepingOrgId(orgId);
+    setPortfolioResult(null);
     setError(null);
     try {
-      const res = await callSimulateVerificationSweep({ orgId, persistRun: true });
-      setSweepResult(res.data);
-      await fetchData();
-      if (expandedOrg === orgId) {
-        const detail = await callGetAdminOrgDetail({ organizationId: orgId });
-        setOrgDetail(detail.data);
-      }
+      const res = await callStartPortfolioSweep({ organizationId: orgId });
+      setPortfolioResult({ ...res.data, orgName });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to run verification sweep");
+      setError(err instanceof Error ? err.message : "Failed to start portfolio sweep");
     } finally {
-      setSimulatingOrgId(null);
+      setPortfolioSweepingOrgId(null);
     }
   };
 
@@ -306,14 +282,19 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {sweepResult && (() => {
-          const banner = getSweepResultBanner(sweepResult);
-          return (
-            <div className={`${banner.className} rounded-lg p-4 text-sm`}>
-              {banner.label} for <strong>{sweepResult.orgId}</strong>: {sweepResult.successCount} verified, {sweepResult.errorCount} errors, {sweepResult.policies} policies scanned in {Math.round(sweepResult.durationMs / 1000)}s.
-            </div>
-          );
-        })()}
+        {portfolioResult && (
+          <div className="bg-emerald-500/10 border border-emerald-500/25 text-emerald-200 rounded-lg p-4 text-sm">
+            Portfolio sweep queued for <strong>{portfolioResult.orgName}</strong>:{" "}
+            {portfolioResult.policyQueue.length} polic{portfolioResult.policyQueue.length === 1 ? "y" : "ies"} queued for the operator
+            {portfolioResult.carriersToLogin.length > 0
+              ? ` (log into: ${portfolioResult.carriersToLogin.join(", ")})`
+              : ""}
+            {portfolioResult.manualReviewCount > 0
+              ? ` · ${portfolioResult.manualReviewCount} need manual verification by the dealer`
+              : ""}
+            . Open the AutoLien Operator and log into the listed portals to start.
+          </div>
+        )}
 
         {loading && !data ? (
           <div className="flex items-center justify-center py-20">
@@ -452,19 +433,19 @@ export default function AdminDashboard() {
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          disabled={simulatingOrgId === org.id}
+                                          disabled={portfolioSweepingOrgId === org.id}
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            handleSimulateSweep(org.id);
+                                            handlePortfolioSweep(org.id, org.name);
                                           }}
                                         >
-                                          {simulatingOrgId === org.id ? (
+                                          {portfolioSweepingOrgId === org.id ? (
                                             <>
                                               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                              Running...
+                                              Queuing...
                                             </>
                                           ) : (
-                                            "Run Sweep"
+                                            "Sweep Portfolio"
                                           )}
                                         </Button>
                                         <Button

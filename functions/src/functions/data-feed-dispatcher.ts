@@ -14,8 +14,7 @@ import {
   summarizeEngineBatchResult,
   type EngineBatchResultSummary,
 } from "../services/engine-batch-result";
-import { getLenderAlertEmail } from "../services/lender-email";
-import { sendSweepReminderEmail } from "../services/email";
+import { ADMIN_EMAIL, sendSweepReminderEmail } from "../services/email";
 import type { VerificationBatch, VerificationInput } from "./data-feed-types";
 
 const DASHBOARD_URL = "https://app.autolientracker.com";
@@ -172,18 +171,14 @@ export async function sendSweepReminderForOrg(
       `manual=${manualCount}, carriers=${Array.from(carriers).join(",")}`,
   );
 
-  const to = await getLenderAlertEmail(orgId);
-  if (!to) {
-    logger.warn(`[sweep-reminder] No admin email for org ${orgId} — banner only`);
-    return false;
-  }
-
+  // Email goes to AutoLien staff (super admin) — they run the paid sweeps,
+  // not the dealer. The dealer just sees the banner written above.
   const result = await sendSweepReminderEmail({
-    to,
+    to: ADMIN_EMAIL,
     dealershipName,
     operatorReadyCount,
     manualCount,
-    dashboardUrl: DASHBOARD_URL,
+    dashboardUrl: `${DASHBOARD_URL}/admin`,
   });
   if (!result.success) {
     logger.warn(`[sweep-reminder] Email failed for org ${orgId}: ${result.error}`);
