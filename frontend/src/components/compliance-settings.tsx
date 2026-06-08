@@ -139,9 +139,15 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
         organizationId,
         name: profile.name,
         type: profile.type,
+        lienholderName: profile.lienholderName ?? "",
       });
-      setProfile({ name: res.data.name, type: res.data.type });
-      setOriginalProfile({ name: res.data.name, type: res.data.type });
+      const saved: OrganizationProfile = {
+        ...profile,
+        name: res.data.name,
+        type: res.data.type,
+      };
+      setProfile(saved);
+      setOriginalProfile(saved);
       setProfileSuccess(true);
       setTimeout(() => setProfileSuccess(false), 3000);
     } catch (err) {
@@ -273,6 +279,21 @@ export function ComplianceSettings({ organizationId }: ComplianceSettingsProps) 
               <option value="CREDIT_UNION">Credit Union</option>
               <option value="FINANCE_COMPANY">Finance Company</option>
             </select>
+          </div>
+
+          <div>
+            <p className="text-sm text-offwhite font-medium">Expected Lienholder Name</p>
+            <p className="text-xs text-carbon-light mt-0.5 mb-2">
+              The name that must appear as the lienholder on borrower policies. Verification flags a
+              policy when this doesn&apos;t match. Usually your company name.
+            </p>
+            <input
+              type="text"
+              value={profile.lienholderName ?? ""}
+              onChange={(e) => setProfile((prev) => (prev ? { ...prev, lienholderName: e.target.value } : prev))}
+              placeholder={profile.name || "Acme Auto Finance"}
+              className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm text-offwhite placeholder:text-carbon focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
+            />
           </div>
         </div>
       </div>
