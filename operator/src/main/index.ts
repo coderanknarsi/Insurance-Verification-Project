@@ -93,15 +93,34 @@ async function startRendererServer(): Promise<string> {
   });
 
   rendererUrl = await new Promise<string>((resolve, reject) => {
-    rendererServer?.once("error", reject);
-    rendererServer?.listen(0, "localhost", () => {
+    // Bind to a STABLE port so the renderer origin (and therefore Firebase's
+    // per-origin auth persistence) is the same on every launch. A random port
+    // would silently log the user out on each restart. Fall back to an
+    // ephemeral port only if the preferred one is already taken.
+    const PREFERRED_PORT = 51789;
+    let triedFallback = false;
+    rendererServer?.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE" && !triedFallback) {
+        triedFallback = true;
+        logger.warn(
+          `Renderer port ${PREFERRED_PORT} in use; falling back to an ephemeral port. ` +
+            "Auth session may not persist across restarts until the preferred port is free.",
+        );
+        rendererServer?.listen(0, "localhost");
+        return;
+      }
+      reject(err);
+    });
+    const onListening = () => {
       const address = rendererServer?.address();
       if (!address || typeof address === "string") {
         reject(new Error("Renderer server did not bind to a TCP port"));
         return;
       }
       resolve(`http://localhost:${address.port}/index.html`);
-    });
+    };
+    rendererServer?.on("listening", onListening);
+    rendererServer?.listen(PREFERRED_PORT, "localhost");
   });
   logger.info("Renderer server started", { url: rendererUrl });
   return rendererUrl;

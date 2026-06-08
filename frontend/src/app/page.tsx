@@ -26,6 +26,7 @@ import { BorrowerDetailPanel } from "@/components/borrower-detail-panel";
 import { ComplianceSettings } from "@/components/compliance-settings";
 import { BillingSettings } from "@/components/billing-settings";
 import { VerificationsList } from "@/components/verifications-list";
+import { SweepReminderBanner } from "@/components/sweep-reminder-banner";
 import { TeamSettings } from "@/components/team-settings";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { DemoWelcomeModal } from "@/components/demo-welcome-modal";
@@ -447,6 +448,10 @@ export default function Home() {
 
           {activeNav === "dashboard" && organizationId && (
             <>
+              <SweepReminderBanner
+                organizationId={organizationId}
+                onSweepNow={() => setActiveNav("verifications")}
+              />
               <DashboardHeaderStrip organizationId={organizationId} />
               <DashboardSummary
                 organizationId={organizationId}

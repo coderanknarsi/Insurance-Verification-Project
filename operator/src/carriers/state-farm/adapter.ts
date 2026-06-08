@@ -65,19 +65,49 @@ async function probeState(page: Page): Promise<PageState> {
   }, SEARCH_URL_FRAGMENT);
 }
 
-async function ensureOnSearch(page: Page): Promise<boolean> {
-  const url = page.url();
-  if (!url.includes(SEARCH_URL_FRAGMENT)) {
+/**
+ * Poll {@link probeState} until the page settles on a meaningful state.
+ *
+ * Clicking the search/Continue buttons triggers a navigation, but
+ * `waitForLoadState("domcontentloaded")` resolves immediately because the
+ * *previous* document is already loaded — so a naive single probe reads the
+ * stale page (observed: post-Continue re-probe ran 17ms after the click and
+ * still saw the Auto Selection page). This waits until the state is no longer
+ * "unknown" and (optionally) no longer a stale `away` state.
+ */
+async function waitForPageState(
+  page: Page,
+  opts: { away?: PageState } = {},
+): Promise<PageState> {
+  const deadline = Date.now() + STEP_TIMEOUT_MS;
+  // probeState runs a page.evaluate; if a navigation is in flight (e.g. right
+  // after clicking Continue) the execution context is destroyed and evaluate
+  // throws. Treat that as a transient "unknown" and keep polling.
+  const safeProbe = async (): Promise<PageState> => {
     try {
-      await page.goto(SEARCH_URL, {
-        waitUntil: "domcontentloaded",
-        timeout: STEP_TIMEOUT_MS,
-      });
+      return await probeState(page);
     } catch {
-      return false;
+      return "unknown";
     }
+  };
+  let state = await safeProbe();
+  while (Date.now() < deadline) {
+    if (state !== "unknown" && state !== opts.away) return state;
+    await page.waitForTimeout(400);
+    state = await safeProbe();
   }
-  if (page.url().includes(LOGIN_URL_FRAGMENT)) return false;
+  return state;
+}
+
+async function ensureOnSearch(page: Page): Promise<boolean> {
+  // The Insurance Inquiry tool runs on a session-scoped host (lenders.apps.*
+  // with a per-session _cid token) that the user navigates to manually, so we
+  // never force-navigate to a hardcoded URL. We only confirm the current tab
+  // is the search page and has the VIN field ready.
+  const url = page.url();
+  if (url.includes(LOGIN_URL_FRAGMENT) && !url.includes(SEARCH_URL_FRAGMENT)) {
+    return false;
+  }
   try {
     await page.waitForSelector("#vinID", { timeout: STEP_TIMEOUT_MS });
   } catch {
@@ -122,55 +152,86 @@ async function pickAutoSelection(
 ): Promise<{ picked: string; rowText: string }> {
   const result = (await page.evaluate(
     ({ lastName, policyNumber }) => {
-      const rows = Array.from(document.querySelectorAll("tr")).filter((tr) =>
-        tr.querySelector('input[type="radio"]'),
-      );
-      if (rows.length === 0) {
-        return { ok: false, error: "No selectable rows on Auto Selection" };
+      // The Auto Selection page lists candidate policies each with its own
+      // radio. The radios aren't necessarily inside <tr> elements, so build
+      // the candidate list from the radios themselves and derive each radio's
+      // "row" by walking up to the nearest row-like ancestor (tr, [role=row],
+      // li, or a labelled container) for text matching.
+      function rowTextFor(radio: HTMLInputElement): string {
+        // Prefer an associated <label>.
+        let labelText = "";
+        if (radio.id) {
+          const lbl = document.querySelector(
+            `label[for="${CSS.escape(radio.id)}"]`,
+          ) as HTMLElement | null;
+          if (lbl) labelText = lbl.innerText || lbl.textContent || "";
+        }
+        const ancestor = radio.closest(
+          'tr, [role="row"], li, fieldset, .row, [class*="row"]',
+        ) as HTMLElement | null;
+        const ancestorText = ancestor
+          ? ancestor.innerText || ancestor.textContent || ""
+          : (radio.parentElement?.innerText ??
+             radio.parentElement?.textContent ??
+             "");
+        return `${labelText} ${ancestorText}`.replace(/\s+/g, " ").trim();
       }
-      let target: Element | null = null;
-      let pickedBy = "first";
+
+      const radios = Array.from(
+        document.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+      ).filter((r) => !r.disabled);
+      const rows = radios.map((radio) => ({ radio, text: rowTextFor(radio) }));
+
+      if (rows.length === 0) {
+        // Surface a small DOM hint so we can adjust selectors if needed.
+        const radioCount = document.querySelectorAll(
+          'input[type="radio"]',
+        ).length;
+        const bodySnippet = (document.body?.innerText ?? "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 300);
+        return {
+          ok: false,
+          error: `No selectable rows on Auto Selection (radios=${radioCount}) — ${bodySnippet}`,
+        };
+      }
+      let target: { radio: HTMLInputElement; text: string } | null = null;
+      let pickedBy = "last-row";
       if (policyNumber) {
         const digits = String(policyNumber).replace(/\D/g, "");
         if (digits) {
-          target =
-            rows.find((tr) =>
-              ((tr as HTMLElement).innerText || "")
-                .replace(/\D/g, "")
-                .includes(digits),
-            ) ?? null;
+          // Exact policy-number match wins; scan from the bottom so the most
+          // recent (active) row is preferred on ties.
+          for (let i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].text.replace(/\D/g, "").includes(digits)) {
+              target = rows[i];
+              break;
+            }
+          }
           if (target) pickedBy = "policy-number";
         }
       }
       if (!target && lastName) {
         const lower = String(lastName).trim().toLowerCase();
-        const matches = rows.filter((tr) =>
-          ((tr as HTMLElement).innerText || "").toLowerCase().includes(lower),
+        const matches = rows.filter((row) =>
+          row.text.toLowerCase().includes(lower),
         );
-        if (matches.length === 1) {
-          target = matches[0];
+        if (matches.length >= 1) {
+          // State Farm lists the active policy last (the prior/inactive policy
+          // appears above it), so when several rows match the borrower we take
+          // the bottom-most match.
+          target = matches[matches.length - 1];
           pickedBy = "last-name";
-        } else if (matches.length > 1) {
-          return {
-            ok: false,
-            error: "ambiguous",
-            choices: matches.map((tr, i) => ({
-              id: String(i),
-              label: ((tr as HTMLElement).innerText || "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .slice(0, 140),
-            })),
-          };
         }
       }
       if (!target) {
-        target = rows[0];
-        pickedBy = "first";
+        // No usable match signal — default to the bottom row, which on the
+        // State Farm Auto Selection page is the active policy.
+        target = rows[rows.length - 1];
+        pickedBy = "last-row";
       }
-      const radio = target.querySelector<HTMLInputElement>(
-        'input[type="radio"]',
-      );
+      const radio = target.radio;
       if (!radio) return { ok: false, error: "Row has no radio button" };
       radio.click();
       const continueBtn = Array.from(
@@ -189,9 +250,7 @@ async function pickAutoSelection(
       return {
         ok: true,
         pickedBy,
-        rowText: ((target as HTMLElement).innerText || "")
-          .replace(/\s+/g, " ")
-          .trim(),
+        rowText: target.text,
       };
     },
     { lastName: policy.borrowerLastName, policyNumber: policy.policyNumber ?? "" },
@@ -298,13 +357,15 @@ async function scrapePolicyInfo(page: Page): Promise<StateFarmScraped> {
 }
 
 async function navigateBackToSearch(page: Page): Promise<void> {
+  // Return to the search form via in-session navigation so we keep the
+  // user's session-scoped host + _cid token (a hardcoded goto would drop it).
   try {
-    await page.goto(SEARCH_URL, {
+    await page.goBack({
       waitUntil: "domcontentloaded",
       timeout: STEP_TIMEOUT_MS,
     });
   } catch {
-    // not fatal — next iteration will reset
+    // not fatal — next iteration re-checks page state
   }
 }
 
@@ -313,6 +374,7 @@ export const stateFarmAdapter: CarrierAdapter = {
   name: "State Farm B2B",
   loginUrl: LOGIN_URL,
   searchUrl: SEARCH_URL,
+  searchPageFragment: SEARCH_URL_FRAGMENT,
 
   async isLoggedIn(page: Page): Promise<boolean> {
     try {
@@ -344,15 +406,19 @@ export const stateFarmAdapter: CarrierAdapter = {
     try {
       const onSearch = await ensureOnSearch(page);
       if (!onSearch) {
-        ctx.log("Not authenticated to State Farm portal");
-        return { status: "error", reason: "Not logged in to State Farm" };
+        ctx.log(
+          "Not on the State Farm Insurance Inquiry search page (expected #vinID). " +
+            "Open the Insurance Inquiry tool tab (Home & Auto Lenders \u2192 Insurance " +
+            "Inquiry \u2192 Insurance Inquiry Tool) before starting the sweep.",
+        );
+        return { status: "error", reason: "Not on State Farm search page" };
       }
       await ctx.screenshot("01-search");
 
       await fillAndSubmit(page, policy.vin);
       await ctx.screenshot("02-after-submit");
 
-      let state = await probeState(page);
+      let state = await waitForPageState(page);
       ctx.log("post-submit state", { state });
 
       if (state === "auto-selection") {
@@ -373,8 +439,11 @@ export const stateFarmAdapter: CarrierAdapter = {
           }
           throw err;
         }
+        // Continue triggers a navigation to the Policy Information page; wait
+        // until the page leaves the (now stale) Auto Selection state.
+        state = await waitForPageState(page, { away: "auto-selection" });
+        ctx.log("post-auto-selection state", { state });
         await ctx.screenshot("03-after-auto-selection");
-        state = await probeState(page);
       }
 
       if (state === "no-results") {

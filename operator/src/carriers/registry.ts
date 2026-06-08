@@ -15,8 +15,15 @@ const adapters: Record<string, CarrierAdapter> = {
   [nationwideAdapter.id]: nationwideAdapter,
 };
 
+/**
+ * Resolve a carrier adapter by id. The backend uses underscore-canonical ids
+ * (e.g. `state_farm`) while operator adapters are keyed with hyphens
+ * (e.g. `state-farm`), so we normalize separators before lookup.
+ */
 export function getCarrierAdapter(id: string): CarrierAdapter | undefined {
-  return adapters[id];
+  if (adapters[id]) return adapters[id];
+  const normalized = id.replace(/_/g, "-");
+  return adapters[normalized];
 }
 
 export function listCarrierAdapters(): CarrierAdapter[] {

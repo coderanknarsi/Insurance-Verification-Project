@@ -48,6 +48,8 @@ export interface RunPolicyInput {
   borrowerFirstName?: string;
   policyNumber?: string;
   insuranceProvider?: string;
+  /** Per-policy carrier for mixed-carrier (portfolio) runs. Falls back to the run's carrierId. */
+  carrierId?: string;
 }
 
 export interface RunPolicyRequest {

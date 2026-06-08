@@ -17,6 +17,22 @@ export const SUPPORTED_CARRIERS = [
 
 export type SupportedCarrier = (typeof SUPPORTED_CARRIERS)[number];
 
+/**
+ * Carriers the AutoLien Operator desktop app has a REAL portal adapter for
+ * (i.e. `verifyVin` actually drives the portal). A carrier can be in
+ * SUPPORTED_CARRIERS yet still be a stub here — those are routed to the
+ * manual-verification worklist instead of an operator sweep. Must match the
+ * non-stub adapters in `operator/src/carriers/registry.ts`.
+ */
+export const ADAPTER_READY_CARRIERS = ["state_farm", "progressive"] as const;
+
+/** True when the operator can auto-verify this carrier via a real adapter. */
+export function hasOperatorAdapter(name: string | undefined | null): boolean {
+  return (ADAPTER_READY_CARRIERS as readonly string[]).includes(
+    normalizeCarrier(name),
+  );
+}
+
 /** Lifecycle state that drives which workflow operates on a policy. */
 export enum VerificationState {
   /** No insurance card uploaded yet — intake-chase is active. */

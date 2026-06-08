@@ -89,6 +89,15 @@ export {
   requestHumanReview,
   resolveHumanReview,
 } from "./functions/manual-carrier-sweep";
+export { startPortfolioSweep } from "./functions/portfolio-sweep";
+export {
+  getManualVerifications,
+  markPolicyManuallyVerified,
+} from "./functions/manual-verification";
+export {
+  getSweepReminder,
+  acknowledgeSweepReminder,
+} from "./functions/sweep-reminder";
 export { onOrgOnboardingComplete } from "./functions/onboarding-kickoff";
 export { getOrgVerificationStatus } from "./functions/get-org-verification-status";
 

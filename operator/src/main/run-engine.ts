@@ -2,6 +2,7 @@ import type { Browser, BrowserContext, Page } from "playwright-core";
 import { getCarrierAdapter } from "../carriers/registry";
 import type {
   AdapterContext,
+  CarrierAdapter,
   PolicyInput,
   ReviewOption,
   ScrapeResult,
@@ -67,7 +68,7 @@ export class OperatorRunEngine {
     const screenshots: CapturedScreenshot[] = [];
     const logs: RunPolicyResult["logs"] = [];
 
-    const page = await this.acquirePage(adapter.id);
+    const page = await this.acquirePage(adapter);
 
     const ctx: AdapterContext = {
       runId: params.runId,
@@ -84,7 +85,7 @@ export class OperatorRunEngine {
           const buf = await page.screenshot({
             fullPage: false,
             type: "png",
-            timeout: 5_000,
+            timeout: 10_000,
           });
           screenshots.push({ label, base64: buf.toString("base64") });
         } catch (err) {
@@ -127,21 +128,41 @@ export class OperatorRunEngine {
     };
   }
 
-  private async acquirePage(carrierId: string): Promise<Page> {
+  private async acquirePage(adapter: CarrierAdapter): Promise<Page> {
     if (!this.browser) throw new Error("Chrome is not connected");
+    const carrierId = adapter.id;
     const existing = this.carrierPages.get(carrierId);
     if (existing && !existing.isClosed()) return existing;
 
     const contexts = this.browser.contexts();
     const context: BrowserContext =
       contexts.length > 0 ? contexts[0] : await this.browser.newContext();
+
+    // Prefer a tab the user already has open on this carrier's search page.
+    // Some portals (e.g. State Farm's Insurance Inquiry tool) run on a
+    // session-scoped host the user reaches manually, so opening a fresh tab
+    // and navigating would drop their session and land on the generic portal.
+    const fragment = adapter.searchPageFragment;
+    if (fragment) {
+      for (const p of context.pages()) {
+        if (!p.isClosed() && p.url().includes(fragment)) {
+          this.bindPage(carrierId, p);
+          return p;
+        }
+      }
+    }
+
     const page = await context.newPage();
+    this.bindPage(carrierId, page);
+    return page;
+  }
+
+  private bindPage(carrierId: string, page: Page): void {
     page.on("close", () => {
       if (this.carrierPages.get(carrierId) === page) {
         this.carrierPages.delete(carrierId);
       }
     });
     this.carrierPages.set(carrierId, page);
-    return page;
   }
 }

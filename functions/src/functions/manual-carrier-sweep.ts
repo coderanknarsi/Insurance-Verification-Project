@@ -16,6 +16,11 @@ import {
   toIsoDate,
   type StateFarmScrapedPolicy,
 } from "../services/state-farm-normalize";
+import {
+  normalizeProgressiveScrape,
+  type ProgressiveScrapedPolicy,
+} from "../services/progressive-normalize";
+import type { ComplianceRules } from "../types/organization";
 import type { VerificationInput } from "./data-feed-types";
 
 /**
@@ -32,6 +37,7 @@ import type { VerificationInput } from "./data-feed-types";
 const CARRIER_ID_MAP: Record<string, string> = {
   "state-farm": "state_farm",
   "state_farm": "state_farm",
+  "progressive": "progressive",
 };
 
 function canonicalCarrierId(carrierId: string | undefined): string {
@@ -48,6 +54,30 @@ function canonicalCarrierId(carrierId: string | undefined): string {
   return canonical;
 }
 
+/**
+ * Dispatch a carrier-specific scrape to the matching normalizer. Each
+ * normalizer returns the same `{ parsed, complianceIssues, dashboardStatus }`
+ * contract so the recording logic is shared. Keyed by canonical carrier id so
+ * a single (portfolio) run can mix carriers.
+ */
+function normalizeScrapeForCarrier(
+  carrierId: string,
+  scraped: StateFarmScrapedPolicy | ProgressiveScrapedPolicy,
+  rules: ComplianceRules | undefined,
+) {
+  switch (canonicalCarrierId(carrierId)) {
+    case "progressive":
+      return normalizeProgressiveScrape(scraped as ProgressiveScrapedPolicy, rules);
+    case "state_farm":
+      return normalizeStateFarmScrape(scraped as StateFarmScrapedPolicy, rules);
+    default:
+      throw new HttpsError(
+        "invalid-argument",
+        `No normalizer for carrierId: ${carrierId}`,
+      );
+  }
+}
+
 interface StartManualSweepRequest {
   organizationId: string;
   carrierId: string;
@@ -62,7 +92,8 @@ interface StartManualSweepResponse {
 interface RecordManualResultRequest {
   runId: string;
   policyId: string;
-  scraped?: StateFarmScrapedPolicy; // per-carrier shape; only state-farm normalizer wired today
+  // Per-carrier scrape shape; dispatched to the matching normalizer by carrierId.
+  scraped?: StateFarmScrapedPolicy | ProgressiveScrapedPolicy;
   error?: string;
   durationMs?: number;
   screenshotPaths?: string[];
@@ -253,10 +284,19 @@ export const recordManualSweepResult = onCall(
     let parsedStatus: PolicyStatus = PolicyStatus.NOT_AVAILABLE;
 
     if (success) {
-      // Only state-farm normalizer wired today; additional carriers add a
-      // dispatch by `run.carrierId` here.
+      // Dispatch to the carrier-specific normalizer by THIS policy's carrier
+      // (a portfolio run mixes carriers, so the run-level carrierId can't be
+      // trusted). Fall back to the run carrier for legacy single-carrier runs.
+      const policyCarrier =
+        normalizeCarrier(policy.insuranceProvider as string | undefined) ||
+        (run.carrierId as string | undefined) ||
+        "";
       const { parsed, complianceIssues, dashboardStatus } =
-        normalizeStateFarmScrape(data.scraped!, rules);
+        normalizeScrapeForCarrier(
+          policyCarrier,
+          data.scraped! as StateFarmScrapedPolicy | ProgressiveScrapedPolicy,
+          rules,
+        );
       parsedStatus = parsed.status;
 
       // The carrier portal frequently omits an expiration date, but the

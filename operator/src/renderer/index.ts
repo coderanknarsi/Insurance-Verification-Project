@@ -1,8 +1,10 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
   GoogleAuthProvider,
+  browserLocalPersistence,
   getAuth,
   onAuthStateChanged,
+  setPersistence,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as fbSignOut,
@@ -56,6 +58,13 @@ async function initFirebase(): Promise<Auth> {
   const config = await bridge.getFirebaseConfig();
   firebaseApp = initializeApp(config);
   firebaseAuth = getAuth(firebaseApp);
+  // Persist the session in this origin's local storage so the user stays
+  // signed in across app restarts (requires a stable renderer origin/port).
+  try {
+    await setPersistence(firebaseAuth, browserLocalPersistence);
+  } catch {
+    // Non-fatal: fall back to default persistence.
+  }
   firebaseDb = getFirestore(firebaseApp);
   firebaseStorage = getStorage(firebaseApp);
   firebaseFunctions = getFunctions(firebaseApp, "us-central1");
@@ -153,9 +162,21 @@ async function handleSignIn(e: SubmitEvent): Promise<void> {
   }
 }
 
+let googleSignInInFlight = false;
+
 async function handleGoogleSignIn(): Promise<void> {
   const errorEl = $("auth-error");
   errorEl.textContent = "";
+
+  // Guard against concurrent popup requests. A second click while the first
+  // popup is still opening aborts the first window (ERR_CONNECTION_CLOSED) and
+  // rejects with auth/cancelled-popup-request.
+  if (googleSignInInFlight) return;
+  googleSignInInFlight = true;
+  const googleBtn = document.getElementById(
+    "google-signin-btn",
+  ) as HTMLButtonElement | null;
+  if (googleBtn) googleBtn.disabled = true;
 
   const auth = await initFirebase();
   const provider = new GoogleAuthProvider();
@@ -165,9 +186,18 @@ async function handleGoogleSignIn(): Promise<void> {
     await signInWithPopup(auth, provider);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    errorEl.textContent = message.includes("operation-not-supported")
-      ? "Google sign-in popup was blocked by this app window. Close and reopen the Operator, then try again."
-      : message;
+    if (/cancelled-popup-request|popup-closed-by-user/i.test(message)) {
+      // User closed the popup or a duplicate request superseded it — stay quiet.
+      errorEl.textContent = "";
+    } else if (/operation-not-supported/i.test(message)) {
+      errorEl.textContent =
+        "Google sign-in popup was blocked by this app window. Close and reopen the Operator, then try again.";
+    } else {
+      errorEl.textContent = message;
+    }
+  } finally {
+    googleSignInInFlight = false;
+    if (googleBtn) googleBtn.disabled = false;
   }
 }
 
@@ -270,16 +300,79 @@ interface PendingRunDoc {
   status: string;
   totalPolicies?: number;
   organizationId?: string;
+  scope?: string;
+  carriersToLogin?: string[];
 }
 
 const runsInFlight = new Set<string>();
+// Portfolio/multi-carrier runs that are waiting for the operator to log into
+// one or more carrier portals. Re-attempted when carrier statuses change.
+const blockedRuns = new Map<string, { run: PendingRunDoc; required: string[] }>();
 const reviewWatchers = new Map<string, () => void>(); // requestId -> unsubscribe
 let runUnsub: (() => void) | null = null;
+let currentUser: User | null = null;
+
+/**
+ * When carrier login statuses change, start any run that was blocked waiting
+ * for its portals — now that they're all logged in.
+ */
+function retryBlockedRuns(statuses: CarrierStatus[]): void {
+  if (blockedRuns.size === 0 || !currentUser) return;
+  for (const [runId, entry] of Array.from(blockedRuns.entries())) {
+    const wanted = entry.required.map(toAdapterId);
+    const allIn = wanted.every((id) => {
+      const s = statuses.find((c) => toAdapterId(c.id) === id);
+      return !!s && s.status === "logged-in";
+    });
+    if (allIn) {
+      blockedRuns.delete(runId);
+      runsInFlight.delete(runId);
+      void processRun(entry.run, currentUser);
+    }
+  }
+}
 
 function renderRunStatus(msg: string): void {
   const el = document.getElementById("run-status");
   if (el) el.textContent = msg;
 }
+
+/** Normalize a carrier id to the operator's hyphenated adapter id form. */
+function toAdapterId(carrierId: string): string {
+  return carrierId.trim().toLowerCase().replace(/_/g, "-");
+}
+
+/**
+ * Check whether every required carrier portal is logged in. Triggers a
+ * recheck on any carrier not currently reporting "logged-in".
+ */
+async function evaluateCarrierLogins(
+  required: string[],
+): Promise<{ ok: boolean; missing: string[] }> {
+  const wanted = new Set(required.map(toAdapterId));
+  if (wanted.size === 0) return { ok: true, missing: [] };
+
+  let statuses = await bridge.getCarrierStatuses();
+  const missing = new Set<string>();
+  for (const id of wanted) {
+    const s = statuses.find((c) => toAdapterId(c.id) === id);
+    if (!s || s.status !== "logged-in") missing.add(id);
+  }
+  // Force a fresh check on any that look logged-out — status may be stale.
+  if (missing.size > 0) {
+    await Promise.all(
+      Array.from(missing).map((id) => bridge.recheckCarrier(id).catch(() => undefined)),
+    );
+    statuses = await bridge.getCarrierStatuses();
+    missing.clear();
+    for (const id of wanted) {
+      const s = statuses.find((c) => toAdapterId(c.id) === id);
+      if (!s || s.status !== "logged-in") missing.add(id);
+    }
+  }
+  return { ok: missing.size === 0, missing: Array.from(missing) };
+}
+
 
 function refreshRunSubscription(user: User | null): void {
   if (runUnsub) {
@@ -321,6 +414,26 @@ function refreshRunSubscription(user: User | null): void {
 async function processRun(run: PendingRunDoc, user: User): Promise<void> {
   if (!firebaseDb || !firebaseFunctions) return;
   runsInFlight.add(run.runId);
+
+  // --- Login gate: block until every required carrier portal is logged in. ---
+  const required =
+    run.carriersToLogin && run.carriersToLogin.length > 0
+      ? run.carriersToLogin
+      : [run.carrierId].filter((c) => !!c && c !== "portfolio");
+  renderRunStatus(`Run ${run.runId}: checking carrier logins…`);
+  const gate = await evaluateCarrierLogins(required);
+  if (!gate.ok) {
+    blockedRuns.set(run.runId, { run, required });
+    for (const id of gate.missing) {
+      void bridge.openCarrierLogin(id).catch(() => undefined);
+    }
+    renderRunStatus(
+      `Run ${run.runId} blocked — log into: ${gate.missing.join(", ")}. It will start automatically once all portals are logged in.`,
+    );
+    return; // stays in runsInFlight; carrier-status watcher re-attempts.
+  }
+  blockedRuns.delete(run.runId);
+
   renderRunStatus(`Claiming run ${run.runId}…`);
 
   try {
@@ -357,7 +470,7 @@ async function processRun(run: PendingRunDoc, user: User): Promise<void> {
     try {
       const resp = await bridge.runPolicy({
         runId: run.runId,
-        carrierId: run.carrierId,
+        carrierId: policy.carrierId ?? run.carrierId,
         policy,
       });
       const screenshotPaths = await uploadScreenshots(run.runId, policy.policyId, resp.screenshots);
@@ -547,11 +660,15 @@ async function main(): Promise<void> {
   // Carrier statuses.
   const initialCarriers = await bridge.getCarrierStatuses();
   renderCarriers(initialCarriers);
-  bridge.onCarrierStatuses(renderCarriers);
+  bridge.onCarrierStatuses((statuses) => {
+    renderCarriers(statuses);
+    retryBlockedRuns(statuses);
+  });
 
   // Firebase Auth.
   const auth = await initFirebase();
   onAuthStateChanged(auth, (user) => {
+    currentUser = user;
     renderUser(user);
     refreshRunSubscription(user);
   });

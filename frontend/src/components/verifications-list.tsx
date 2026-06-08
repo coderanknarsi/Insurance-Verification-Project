@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { callGetVerifications, callSeedVerificationData } from "@/lib/api";
 import type { VerificationRecord } from "@/lib/api";
+import { PortfolioSweepPanel } from "@/components/portfolio-sweep-panel";
 
 interface VerificationsListProps {
   organizationId: string;
@@ -83,6 +84,9 @@ export function VerificationsList({ organizationId }: VerificationsListProps) {
 
   return (
     <div className="space-y-6">
+      {/* Portfolio Sweep + Manual Verification */}
+      <PortfolioSweepPanel organizationId={organizationId} />
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <SummaryCard

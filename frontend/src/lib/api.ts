@@ -318,6 +318,95 @@ export function callUpdateOrganizationProfile(data: {
   )(data);
 }
 
+// ---- Portfolio sweep & manual verification ----
+
+export interface PortfolioSweepQueueItem {
+  policyId: string;
+  vin: string;
+  borrowerLastName: string;
+  borrowerFirstName: string | null;
+  policyNumber: string | null;
+  insuranceProvider: string | null;
+  carrierId: string;
+}
+
+export interface PortfolioManualReviewItem {
+  policyId: string;
+  borrowerName: string;
+  insuranceProvider: string | null;
+  policyNumber: string | null;
+  vin: string | null;
+  reason: "unsupported_carrier" | "no_adapter";
+}
+
+export interface StartPortfolioSweepResult {
+  runId: string;
+  totalPolicies: number;
+  carriersToLogin: string[];
+  policyQueue: PortfolioSweepQueueItem[];
+  manualReview: PortfolioManualReviewItem[];
+  manualReviewCount: number;
+}
+
+export function callStartPortfolioSweep(data: { organizationId: string }) {
+  return httpsCallable<typeof data, StartPortfolioSweepResult>(
+    getClientFunctions(),
+    "startPortfolioSweep"
+  )(data);
+}
+
+export interface ManualVerificationRow {
+  policyId: string;
+  borrowerId: string | null;
+  borrowerName: string;
+  insuranceProvider: string | null;
+  policyNumber: string | null;
+  vin: string | null;
+  vehicleLabel: string | null;
+  reason: "unsupported_carrier" | "no_adapter";
+  lastVerifiedAt: number | null;
+}
+
+export function callGetManualVerifications(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { rows: ManualVerificationRow[] }>(
+    getClientFunctions(),
+    "getManualVerifications"
+  )(data);
+}
+
+export function callMarkPolicyManuallyVerified(data: {
+  organizationId: string;
+  policyId: string;
+  note?: string;
+  confirmedExpirationDate?: string;
+}) {
+  return httpsCallable<typeof data, { success: boolean }>(
+    getClientFunctions(),
+    "markPolicyManuallyVerified"
+  )(data);
+}
+
+export interface SweepReminder {
+  operatorReadyCount: number;
+  manualCount: number;
+  carriers: string[];
+  dueOn: number | null;
+}
+
+export function callGetSweepReminder(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { reminder: SweepReminder | null }>(
+    getClientFunctions(),
+    "getSweepReminder"
+  )(data);
+}
+
+export function callAcknowledgeSweepReminder(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { success: boolean }>(
+    getClientFunctions(),
+    "acknowledgeSweepReminder"
+  )(data);
+}
+
 export interface OrgKickoffResult {
   status: "queued" | "sent";
   sentCount: number;

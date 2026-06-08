@@ -52,6 +52,13 @@ export interface CarrierAdapter {
   name: string;
   loginUrl: string;
   searchUrl: string;
+  /**
+   * Substring that uniquely identifies the carrier's search/verification page
+   * URL. The run engine uses this to reuse a tab the user already has open
+   * (e.g. a session-scoped portal the user navigates to manually) instead of
+   * opening a fresh tab and navigating away.
+   */
+  searchPageFragment?: string;
   isLoggedIn(page: Page): Promise<boolean>;
   verifyVin(page: Page, policy: PolicyInput, ctx: AdapterContext): Promise<ScrapeResult>;
 }

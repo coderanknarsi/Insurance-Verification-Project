@@ -579,6 +579,52 @@ export async function sendDealerLapseAlertEmail(input: {
   return { id: data?.id ?? "", success: true };
 }
 
+/**
+ * Weekly sweep-day reminder. Portal carriers require a human to be logged in,
+ * so instead of a headless sweep we nudge the dealer to open the AutoLien
+ * Operator, log into their carrier portals, and click "Sweep Portfolio".
+ */
+export async function sendSweepReminderEmail(input: {
+  to: string;
+  dealershipName: string;
+  operatorReadyCount: number;
+  manualCount: number;
+  dashboardUrl: string;
+}): Promise<EmailResult> {
+  const subject = "It's your weekly insurance sweep day";
+  const title = "Time to run your portfolio sweep";
+  const readyLine =
+    input.operatorReadyCount > 0
+      ? `<p style="margin:0 0 12px;"><strong>${input.operatorReadyCount}</strong> ${
+          input.operatorReadyCount === 1 ? "policy is" : "policies are"
+        } ready to verify through a carrier portal.</p>`
+      : `<p style="margin:0 0 12px;">No portal-automated policies are due right now.</p>`;
+  const manualLine =
+    input.manualCount > 0
+      ? `<p style="margin:0 0 16px;"><strong>${input.manualCount}</strong> ${
+          input.manualCount === 1 ? "policy needs" : "policies need"
+        } manual verification (unsupported carriers).</p>`
+      : "";
+  const details = `
+    ${readyLine}
+    ${manualLine}
+    <p style="margin:0 0 12px;">Open the <strong>AutoLien Operator</strong>, log into your carrier portals, then click <strong>Sweep Portfolio</strong> in the dashboard to verify your whole book in one pass.</p>
+    <p style="margin:0;"><a href="${input.dashboardUrl}" style="color:#3b82f6;">Open dashboard →</a></p>
+  `;
+  const resend = getResend();
+  const { data, error } = await resend.emails.send({
+    from: fromEmail.value(),
+    to: input.to,
+    subject,
+    html: adminAlertHtml(title, details),
+  });
+  if (error) {
+    console.error("Failed to send sweep reminder email:", error.message);
+    return { id: "", success: false, error: error.message };
+  }
+  return { id: data?.id ?? "", success: true };
+}
+
 // ─── Intake Validation Alert (lender-side) ──────────────────────
 
 /**
