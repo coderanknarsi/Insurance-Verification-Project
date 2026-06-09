@@ -21,7 +21,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { StateFarmSweepDialog } from "@/components/state-farm-sweep-dialog";
 import {
   Table,
   TableBody,
@@ -114,7 +113,6 @@ export default function AdminDashboard() {
   const [portfolioResult, setPortfolioResult] = useState<
     (StartPortfolioSweepResult & { orgName: string }) | null
   >(null);
-  const [stateFarmTarget, setStateFarmTarget] = useState<{ id: string; name: string } | null>(null);
 
   const handleDeleteOrg = async () => {
     if (!deleteTarget || deleteConfirmText !== deleteTarget.name) return;
@@ -449,16 +447,6 @@ export default function AdminDashboard() {
                                           )}
                                         </Button>
                                         <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setStateFarmTarget({ id: org.id, name: org.name });
-                                          }}
-                                        >
-                                          State Farm
-                                        </Button>
-                                        <Button
                                           variant="ghost"
                                           size="icon"
                                           className="h-8 w-8 text-muted-foreground hover:text-red-500"
@@ -541,20 +529,6 @@ export default function AdminDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {stateFarmTarget && (
-          <StateFarmSweepDialog
-            orgId={stateFarmTarget.id}
-            orgName={stateFarmTarget.name}
-            open={!!stateFarmTarget}
-            onOpenChange={(o) => {
-              if (!o) setStateFarmTarget(null);
-            }}
-            onCompleted={() => {
-              void fetchData();
-            }}
-          />
-        )}
       </main>
     </div>
   );
