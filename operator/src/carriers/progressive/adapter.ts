@@ -112,6 +112,12 @@ async function ensureToken(
   ctx.log("No fresh PROVE token cached; reloading portal to capture one");
   try {
     await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
+    // Let the SPA (and Progressive's Quantum Metric fetch wrapper) finish
+    // bootstrapping before we issue our own cross-origin fetch — firing it
+    // mid-load is what surfaces as a transient "Failed to fetch".
+    await page
+      .waitForLoadState("networkidle", { timeout: 15_000 })
+      .catch(() => undefined);
   } catch (err) {
     ctx.log("PROVE reload failed", { error: String(err) });
   }
@@ -142,20 +148,28 @@ async function proveCall(
 ): Promise<ProveCallResult> {
   return page.evaluate(
     async ({ url, method, headers, body }) => {
-      const res = await fetch(url, {
-        method,
-        headers,
-        credentials: "include",
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      let parsed: unknown = null;
-      const text = await res.text().catch(() => "");
+      // A cross-origin fetch from the PROVE SPA can transiently reject with
+      // "Failed to fetch" (e.g. right after a reload, or via Progressive's
+      // Quantum Metric fetch wrapper). Catch it here and surface status 0 so
+      // the caller can retry instead of throwing out of the whole verify.
       try {
-        parsed = text ? JSON.parse(text) : null;
-      } catch {
-        parsed = text;
+        const res = await fetch(url, {
+          method,
+          headers,
+          credentials: "include",
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        let parsed: unknown = null;
+        const text = await res.text().catch(() => "");
+        try {
+          parsed = text ? JSON.parse(text) : null;
+        } catch {
+          parsed = text;
+        }
+        return { status: res.status, body: parsed };
+      } catch (e) {
+        return { status: 0, body: e instanceof Error ? e.message : String(e) };
       }
-      return { status: res.status, body: parsed };
     },
     {
       url: `${API_BASE}${VEHICLES_ENDPOINT}`,
@@ -249,6 +263,7 @@ type SearchOutcome =
   | { kind: "found"; data: ProgressiveScraped }
   | { kind: "not-found" }
   | { kind: "unauthorized" }
+  | { kind: "network-error"; reason: string }
   | { kind: "error"; reason: string };
 
 /** Runs one PROVE search (VIN or policy number). */
@@ -258,6 +273,15 @@ async function search(
   body: Record<string, unknown>,
 ): Promise<SearchOutcome> {
   const res = await proveCall(page, bearer, "POST", body);
+  // status 0 = the in-page fetch threw (e.g. "Failed to fetch") rather than
+  // returning an HTTP response — retryable, not a real auth/data failure.
+  if (res.status === 0) {
+    return {
+      kind: "network-error",
+      reason:
+        typeof res.body === "string" && res.body ? res.body : "Failed to fetch",
+    };
+  }
   if (res.status === 401 || res.status === 403 || res.status === 302) {
     return { kind: "unauthorized" };
   }
@@ -335,9 +359,17 @@ export const progressiveAdapter: CarrierAdapter = {
         FullVinNumber: policy.vin,
       });
 
-      // Token may have expired mid-run — refresh once and retry.
-      if (result.kind === "unauthorized") {
-        ctx.log("PROVE token expired; refreshing and retrying");
+      // The token can expire mid-run (401), or the cross-origin fetch can
+      // transiently reject ("Failed to fetch") right after the portal reload.
+      // Either way, reload the SPA to re-warm the page + mint a fresh token,
+      // then retry the search once.
+      if (result.kind === "unauthorized" || result.kind === "network-error") {
+        ctx.log(
+          result.kind === "unauthorized"
+            ? "PROVE session unauthorized; refreshing token and retrying"
+            : "PROVE request failed to fetch; reloading portal and retrying",
+          result.kind === "network-error" ? { reason: result.reason } : undefined,
+        );
         authByPage.delete(page);
         bearer = await ensureToken(page, ctx);
         if (!bearer) {
