@@ -389,6 +389,7 @@ async function navigateBackToSearch(page: Page): Promise<void> {
 export const stateFarmAdapter: CarrierAdapter = {
   id: "state-farm",
   name: "State Farm B2B",
+  ready: true,
   loginUrl: LOGIN_URL,
   searchUrl: SEARCH_URL,
   searchPageFragment: SEARCH_URL_FRAGMENT,

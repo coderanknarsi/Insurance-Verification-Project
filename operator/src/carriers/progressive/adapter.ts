@@ -33,6 +33,11 @@ const API_BASE = "https://api.progressive.com";
 const VEHICLES_ENDPOINT = "/ProveAPI/v1/vehicles";
 const API_KEY = "69fc6eb45aae482c82567101c6bc67f5";
 const LOGIN_FRAGMENT = "/login";
+// When a PROVE session expires the SPA bounces to PingFederate on this host
+// (e.g. login.progressive.com/as/authorization.oauth2 …). Treat it as logged-out
+// so the sweep login gate blocks and prompts a re-login instead of running and
+// failing mid-VIN with an opaque "Failed to fetch".
+const AUTH_REDIRECT_HOST = "login.progressive.com";
 
 // Token is good for ~5 min; refresh proactively a little before that.
 const TOKEN_MAX_AGE_MS = 4 * 60 * 1000;
@@ -273,6 +278,7 @@ async function search(
 export const progressiveAdapter: CarrierAdapter = {
   id: "progressive",
   name: "Progressive (PROVE)",
+  ready: true,
   loginUrl: "https://prove.progressive.com/login",
   searchUrl: "https://prove.progressive.com/",
   // Reuse the PROVE tab the operator already has logged in.
@@ -281,6 +287,7 @@ export const progressiveAdapter: CarrierAdapter = {
   async isLoggedIn(page: Page): Promise<boolean> {
     try {
       const url = page.url();
+      if (url.includes(AUTH_REDIRECT_HOST)) return false;
       if (!url.includes(PROVE_HOST)) return false;
       return !url.includes(LOGIN_FRAGMENT);
     } catch {
@@ -295,7 +302,11 @@ export const progressiveAdapter: CarrierAdapter = {
   ): Promise<ScrapeResult> {
     try {
       const url = page.url();
-      if (!url.includes(PROVE_HOST) || url.includes(LOGIN_FRAGMENT)) {
+      if (
+        url.includes(AUTH_REDIRECT_HOST) ||
+        !url.includes(PROVE_HOST) ||
+        url.includes(LOGIN_FRAGMENT)
+      ) {
         ctx.log(
           "Not on the Progressive PROVE portal. Log into prove.progressive.com " +
             "and reach the Find a Policy page before starting the sweep.",

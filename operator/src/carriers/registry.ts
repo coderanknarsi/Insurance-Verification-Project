@@ -29,3 +29,12 @@ export function getCarrierAdapter(id: string): CarrierAdapter | undefined {
 export function listCarrierAdapters(): CarrierAdapter[] {
   return Object.values(adapters);
 }
+
+/**
+ * Adapters that are actually implemented and safe to drive. The operator only
+ * monitors and offers login for these; stub adapters are excluded so they
+ * don't generate failing heartbeats or login attempts.
+ */
+export function listReadyCarrierAdapters(): CarrierAdapter[] {
+  return Object.values(adapters).filter((a) => a.ready === true);
+}

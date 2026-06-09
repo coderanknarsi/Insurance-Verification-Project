@@ -1,5 +1,5 @@
 import type { Browser, BrowserContext, Page } from "playwright-core";
-import { listCarrierAdapters, getCarrierAdapter } from "../carriers/registry";
+import { listReadyCarrierAdapters, getCarrierAdapter } from "../carriers/registry";
 import type { CarrierAdapter } from "../carriers/types";
 import { logger } from "../shared/logger";
 import type { CarrierStatus } from "../shared/bridge-types";
@@ -21,7 +21,7 @@ export class CarrierMonitor {
   private timer: NodeJS.Timeout | null = null;
 
   constructor() {
-    for (const adapter of listCarrierAdapters()) {
+    for (const adapter of listReadyCarrierAdapters()) {
       this.states.set(adapter.id, {
         status: {
           id: adapter.id,
@@ -186,10 +186,16 @@ export class CarrierMonitor {
     if (!this.browser) throw new Error("Chrome is not connected. Try Relaunch Chrome first.");
     const context = this.firstContext(this.browser);
     if (!context) throw new Error("No browser context available");
+    // Only reuse a tab that already belongs to THIS carrier. Reusing an
+    // unrelated carrier's tab (previously any statefarm.com tab) would navigate
+    // it away and destroy that carrier's session — e.g. opening Allstate login
+    // would hijack and log the user out of State Farm. When no matching tab
+    // exists, open a fresh one.
+    const domain = registrableDomain(adapter.loginUrl);
     let target: Page | null = null;
     for (const p of context.pages()) {
       try {
-        if (p.url().includes("statefarm.com")) {
+        if (domain && p.url().includes(domain)) {
           target = p;
           break;
         }

@@ -53,6 +53,13 @@ export interface CarrierAdapter {
   loginUrl: string;
   searchUrl: string;
   /**
+   * Whether this adapter is implemented and safe to drive. Stub adapters
+   * (verifyVin returns an error) set this false/undefined so the operator does
+   * not monitor them or offer them for login. Mirrors the backend's
+   * ADAPTER_READY_CARRIERS allow-list.
+   */
+  ready?: boolean;
+  /**
    * Substring that uniquely identifies the carrier's search/verification page
    * URL. The run engine uses this to reuse a tab the user already has open
    * (e.g. a session-scoped portal the user navigates to manually) instead of
