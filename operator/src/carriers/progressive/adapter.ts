@@ -138,7 +138,15 @@ interface ProveCallResult {
 
 /**
  * Issues a PROVE API call from within the page context so it inherits the
- * authenticated browser session (cookies, proxy, TLS fingerprint).
+ * authenticated browser session (proxy, TLS fingerprint).
+ *
+ * NOTE: api.progressive.com is a *different origin* than prove.progressive.com,
+ * so this is a cross-origin fetch. PROVE authenticates purely with the Bearer
+ * token + api_key header — NOT cookies — and the API does not return
+ * `Access-Control-Allow-Credentials: true`. The SPA (Angular HttpClient,
+ * withCredentials=false) therefore sends NO credentials. We must match that:
+ * using `credentials: "include"` makes the browser block the response with an
+ * opaque "Failed to fetch" on every call.
  */
 async function proveCall(
   page: Page,
@@ -156,7 +164,7 @@ async function proveCall(
         const res = await fetch(url, {
           method,
           headers,
-          credentials: "include",
+          credentials: "same-origin",
           body: body ? JSON.stringify(body) : undefined,
         });
         let parsed: unknown = null;
