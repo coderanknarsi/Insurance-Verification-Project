@@ -491,7 +491,13 @@ async function processRun(run: PendingRunDoc, user: User): Promise<void> {
         carrierId: policy.carrierId ?? run.carrierId,
         policy,
       });
+      renderRunStatus(
+        `Run ${run.runId}: ${i + 1}/${policies.length} — uploading screenshots…`,
+      );
       const screenshotPaths = await uploadScreenshots(run.runId, policy.policyId, resp.screenshots);
+      renderRunStatus(
+        `Run ${run.runId}: ${i + 1}/${policies.length} — recording result…`,
+      );
       await recordResult(run.runId, policy.policyId, resp, screenshotPaths);
       if (resp.result.status === "found") ok++;
       else err++;
@@ -545,6 +551,25 @@ async function getDocOnce(
   });
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function uploadScreenshots(
   runId: string,
   policyId: string,
@@ -557,9 +582,13 @@ async function uploadScreenshots(
     const path = `dataFeedRuns/${runId}/results/${policyId}/${safe}.png`;
     const ref = storageRef(firebaseStorage, path);
     try {
-      await uploadString(ref, s.base64, "base64", {
-        contentType: "image/png",
-      });
+      // Bound each upload so a slow/unreachable Storage bucket can never
+      // block the verification result from being recorded.
+      await withTimeout(
+        uploadString(ref, s.base64, "base64", { contentType: "image/png" }),
+        15000,
+        `Screenshot upload ${safe}`,
+      );
       paths.push(path);
     } catch (err) {
       console.warn("Screenshot upload failed", path, err);
