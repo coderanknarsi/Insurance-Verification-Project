@@ -75,6 +75,40 @@ export const startPortfolioSweep = onCall(
       requireOrg(user, orgId);
     }
 
+    // Dedupe: if an active portfolio run already exists for this org, return it
+    // instead of creating a duplicate. Rapid double-clicks (or a sweep already
+    // in progress) otherwise pile up concurrent runs that fight over the same
+    // operator/portal tabs and drop results. A "running" run is only considered
+    // active if it was claimed recently; older ones are treated as stale/orphaned
+    // so a new sweep can supersede them.
+    const STALE_RUNNING_MS = 15 * 60 * 1000;
+    const existingSnap = await db
+      .collection("dataFeedRuns")
+      .where("organizationId", "==", orgId)
+      .where("scope", "==", "portfolio")
+      .get();
+    const activeExisting = existingSnap.docs.find((doc) => {
+      const d = doc.data();
+      if (d.status === "awaiting_operator") return true;
+      if (d.status !== "running") return false;
+      const startedMs = d.startedAt?.toMillis?.() ?? 0;
+      return Date.now() - startedMs < STALE_RUNNING_MS;
+    });
+    if (activeExisting) {
+      const d = activeExisting.data();
+      logger.info(
+        `[portfolio-sweep] Reusing active run ${d.runId} for org=${orgId} (status=${d.status}) instead of creating a duplicate`,
+      );
+      return {
+        runId: d.runId,
+        totalPolicies: d.totalPolicies ?? (d.policyQueue ?? []).length,
+        carriersToLogin: d.carriersToLogin ?? [],
+        policyQueue: (d.policyQueue ?? []) as PortfolioQueueItem[],
+        manualReview: [],
+        manualReviewCount: d.manualReviewCount ?? 0,
+      };
+    }
+
     // Carriers the org holds active master creds for (drives verification state).
     const credsSnap = await db
       .collection("masterCredentials")

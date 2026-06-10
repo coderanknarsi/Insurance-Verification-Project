@@ -312,6 +312,26 @@ const reviewWatchers = new Map<string, () => void>(); // requestId -> unsubscrib
 let runUnsub: (() => void) | null = null;
 let currentUser: User | null = null;
 
+// Runs MUST execute one at a time: the main-process run-engine and the carrier
+// Chrome tabs are shared singletons, so processing two runs concurrently makes
+// them stomp each other (reloading the same portal mid-scrape, racing the
+// token capture) and a successful scrape's result can be lost before it is
+// recorded. This promise chain drains queued runs serially.
+let runChain: Promise<void> = Promise.resolve();
+
+/** Queue a run for serial processing (deduped by runId). */
+function enqueueRun(run: PendingRunDoc, user: User): void {
+  if (runsInFlight.has(run.runId)) return;
+  runsInFlight.add(run.runId);
+  runChain = runChain
+    .then(() => processRun(run, user))
+    .catch((e) => {
+      console.error("processRun failed", run.runId, e);
+      // Allow a future listener/retry to pick it up again.
+      runsInFlight.delete(run.runId);
+    });
+}
+
 /**
  * When carrier login statuses change, start any run that was blocked waiting
  * for its portals — now that they're all logged in.
@@ -327,7 +347,7 @@ function retryBlockedRuns(statuses: CarrierStatus[]): void {
     if (allIn) {
       blockedRuns.delete(runId);
       runsInFlight.delete(runId);
-      void processRun(entry.run, currentUser);
+      enqueueRun(entry.run, currentUser);
     }
   }
 }
@@ -400,9 +420,7 @@ function refreshRunSubscription(user: User | null): void {
     (snap: QuerySnapshot<DocumentData>) => {
       for (const d of snap.docs) {
         const data = d.data() as PendingRunDoc;
-        if (!runsInFlight.has(data.runId)) {
-          void processRun(data, user);
-        }
+        enqueueRun(data, user);
       }
     },
     (err) => {
@@ -413,7 +431,7 @@ function refreshRunSubscription(user: User | null): void {
 
 async function processRun(run: PendingRunDoc, user: User): Promise<void> {
   if (!firebaseDb || !firebaseFunctions) return;
-  runsInFlight.add(run.runId);
+  // runsInFlight is added by enqueueRun before the run reaches the chain.
 
   // --- Login gate: block until every required carrier portal is logged in. ---
   const required =
