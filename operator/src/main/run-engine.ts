@@ -31,6 +31,50 @@ export type HumanReviewBridge = (review: {
 }) => Promise<string>;
 
 /**
+ * Capture a PNG of the page as base64. Prefers the Chrome DevTools Protocol
+ * `Page.captureScreenshot`, which (unlike Playwright's `page.screenshot`) does
+ * NOT block on `document.fonts.ready`. Carrier portals frequently stall web
+ * font loading, which made the Playwright path time out and drop the audit
+ * screenshot entirely. Falls back to Playwright's screenshot if CDP is
+ * unavailable. Returns null only if both paths fail (verification still
+ * proceeds — screenshots are best-effort).
+ */
+async function captureScreenshot(
+  page: Page,
+  label: string,
+): Promise<string | null> {
+  try {
+    const client = await page.context().newCDPSession(page);
+    try {
+      const { data } = (await client.send("Page.captureScreenshot", {
+        format: "png",
+        captureBeyondViewport: false,
+      })) as { data: string };
+      return data; // already base64, no data URL prefix
+    } finally {
+      await client.detach().catch(() => undefined);
+    }
+  } catch (cdpErr) {
+    logger.warn(`Screenshot ${label} CDP capture failed; trying Playwright`, {
+      error: String(cdpErr),
+    });
+    try {
+      const buf = await page.screenshot({
+        fullPage: false,
+        type: "png",
+        timeout: 8_000,
+        animations: "disabled",
+        caret: "hide",
+      });
+      return buf.toString("base64");
+    } catch (err) {
+      logger.warn(`Screenshot ${label} failed`, { error: String(err) });
+      return null;
+    }
+  }
+}
+
+/**
  * Drives one VIN through a carrier adapter on the managed Chrome browser.
  *
  * Owns a dedicated "verification page" per carrier so the user's other tabs
@@ -81,15 +125,9 @@ export class OperatorRunEngine {
         );
       },
       screenshot: async (label: string) => {
-        try {
-          const buf = await page.screenshot({
-            fullPage: false,
-            type: "png",
-            timeout: 10_000,
-          });
-          screenshots.push({ label, base64: buf.toString("base64") });
-        } catch (err) {
-          logger.warn(`Screenshot ${label} failed`, { error: String(err) });
+        const base64 = await captureScreenshot(page, label);
+        if (base64) {
+          screenshots.push({ label, base64 });
         }
         return label; // Storage path is assigned by the renderer at upload time.
       },
