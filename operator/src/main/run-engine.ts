@@ -38,18 +38,49 @@ export type HumanReviewBridge = (review: {
  * screenshot entirely. Falls back to Playwright's screenshot if CDP is
  * unavailable. Returns null only if both paths fail (verification still
  * proceeds — screenshots are best-effort).
+ *
+ * Every path is hard-bounded by a timeout: a hung capture must NEVER block the
+ * verification run (a stuck CDP `Page.captureScreenshot` previously froze a
+ * State Farm policy-info screenshot and the whole sweep with it).
  */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function captureScreenshot(
   page: Page,
   label: string,
 ): Promise<string | null> {
   try {
-    const client = await page.context().newCDPSession(page);
+    const client = await withTimeout(
+      page.context().newCDPSession(page),
+      5_000,
+      `Screenshot ${label} CDP session`,
+    );
     try {
-      const { data } = (await client.send("Page.captureScreenshot", {
-        format: "png",
-        captureBeyondViewport: false,
-      })) as { data: string };
+      const { data } = (await withTimeout(
+        client.send("Page.captureScreenshot", {
+          format: "png",
+          captureBeyondViewport: false,
+        }),
+        10_000,
+        `Screenshot ${label} CDP capture`,
+      )) as { data: string };
       return data; // already base64, no data URL prefix
     } finally {
       await client.detach().catch(() => undefined);
