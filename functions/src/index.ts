@@ -101,6 +101,15 @@ export {
 export { onOrgOnboardingComplete } from "./functions/onboarding-kickoff";
 export { getOrgVerificationStatus } from "./functions/get-org-verification-status";
 
+// Partner integration API (DMS/CRM push + status polling)
+export { partnerDealsApi } from "./functions/partner-deals-api";
+export {
+  issuePartnerApiKey,
+  revokePartnerApiKey,
+  listPartnerApiKeys,
+  setPartnerWebhookConfig,
+} from "./functions/partner-api-keys";
+
 // Borrower Intake (magic link SMS workflow)
 export {
   requestBorrowerIntake,

@@ -1,0 +1,200 @@
+openapi: "3.0.3"
+info:
+  title: AutoLien Tracker Partner API
+  version: "1.0.0"
+  description: |
+    REST API for dealer management systems (DMS), CRMs, and other partner
+    platforms to push funded deals into AutoLien Tracker and read insurance
+    verification status.
+
+    **Authentication:** every request requires a per-dealership API key:
+    `Authorization: Bearer alt_live_...` (or `X-API-Key: alt_live_...`).
+    Keys are issued by AutoLien and scoped to exactly one dealership
+    (organization). All data access is isolated to that dealership.
+
+    **Idempotency:** include an `Idempotency-Key` header on POST requests.
+    Retries with the same key return the original response. Borrowers also
+    deduplicate by `loanNumber` and vehicles by VIN, so replays are safe.
+
+    **Webhooks:** when a policy's verification status changes, AutoLien sends
+    a signed POST (`policy.verification.updated`) to your registered webhook
+    URL. See the `WebhookEvent` schema and the integration guide for
+    signature verification.
+servers:
+  - url: https://us-central1-insurance-track-os.cloudfunctions.net/partnerDealsApi
+security:
+  - bearerAuth: []
+paths:
+  /v1/deals:
+    post:
+      summary: Push a funded deal
+      description: |
+        Creates (or updates) the borrower, vehicle, and an initial UNVERIFIED
+        insurance policy. If insurance details are missing, AutoLien
+        automatically sends the borrower an intake request (SMS/email) to
+        collect them — no manual entry needed by dealership staff.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+          description: Unique key per logical request; retries return the original response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealInput" }
+      responses:
+        "201":
+          description: Deal ingested.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealCreated" }
+        "200":
+          description: Idempotent replay of a previously processed request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealCreated" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/InvalidRequest" }
+  /v1/deals/{policyId}:
+    get:
+      summary: Read verification status
+      description: Returns the current insurance verification status for a deal's policy.
+      parameters:
+        - in: path
+          name: policyId
+          required: true
+          schema: { type: string }
+          description: The `policyId` returned by POST /v1/deals.
+      responses:
+        "200":
+          description: Current status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "AutoLien partner API key (alt_live_...)"
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or revoked API key.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InvalidRequest:
+      description: Payload failed validation.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Unknown resource (or not visible to this API key).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    DealInput:
+      type: object
+      required: [borrower, vehicle]
+      properties:
+        borrower:
+          type: object
+          required: [firstName, lastName]
+          description: At least one of email or phone is required.
+          properties:
+            firstName: { type: string }
+            lastName: { type: string }
+            email: { type: string, format: email }
+            phone: { type: string, description: "E.164 preferred (+15551234567)" }
+            loanNumber:
+              type: string
+              description: Your external deal/loan ID. Used to deduplicate borrowers on retries.
+            smsConsent:
+              type: boolean
+              description: Whether the borrower consented to SMS at signing.
+        vehicle:
+          type: object
+          required: [vin]
+          properties:
+            vin: { type: string }
+            make: { type: string }
+            model: { type: string }
+            year: { type: integer }
+        insurance:
+          type: object
+          description: |
+            Optional. When provider + policyNumber are present, verification can
+            start immediately; otherwise AutoLien contacts the borrower to
+            collect insurance details.
+          properties:
+            provider: { type: string, example: "Progressive" }
+            policyNumber: { type: string }
+    DealCreated:
+      type: object
+      properties:
+        policyId: { type: string, description: "Use for GET /v1/deals/{policyId} and webhook correlation." }
+        borrowerId: { type: string }
+        vehicleId: { type: string }
+        isNewBorrower: { type: boolean }
+        intakeRequested:
+          type: boolean
+          description: True when AutoLien sent the borrower an insurance intake request.
+        idempotentReplay:
+          type: boolean
+          description: Present and true when this response is an idempotent replay.
+    DealStatus:
+      type: object
+      properties:
+        policyId: { type: string }
+        loanNumber: { type: string, nullable: true }
+        status:
+          type: string
+          nullable: true
+          description: Policy status (e.g. ACTIVE, UNVERIFIED, CANCELLED).
+        dashboardStatus:
+          type: string
+          nullable: true
+          description: Compliance roll-up (GREEN / YELLOW / RED).
+        complianceIssues:
+          type: array
+          items: { type: string }
+        isLienholderListed: { type: boolean, nullable: true }
+        insuranceProvider: { type: string, nullable: true }
+        policyNumber: { type: string, nullable: true }
+        lastVerifiedAt: { type: string, format: date-time, nullable: true }
+        lastVerificationError: { type: string, nullable: true }
+    WebhookEvent:
+      type: object
+      description: |
+        Sent as a POST to your registered webhook URL whenever a verification
+        result is recorded. Headers:
+          X-AutoLien-Timestamp: unix seconds
+          X-AutoLien-Signature: v1=<hex HMAC-SHA256 of "<timestamp>.<rawBody>" using your shared secret>
+        Verify the signature and reject timestamps older than 300 seconds.
+      properties:
+        event: { type: string, enum: ["policy.verification.updated"] }
+        policyId: { type: string }
+        loanNumber: { type: string, nullable: true }
+        status: { type: string, nullable: true }
+        dashboardStatus: { type: string, nullable: true }
+        complianceIssues:
+          type: array
+          items: { type: string }
+        isLienholderListed: { type: boolean, nullable: true }
+        lastVerifiedAt: { type: string, format: date-time, nullable: true }
+        lastVerificationError: { type: string, nullable: true }
+        verifiedVia: { type: string, example: "manual-operator" }
+        sentAt: { type: string, format: date-time }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: "invalid_request" }
+            message: { type: string }

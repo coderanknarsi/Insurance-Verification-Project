@@ -22,6 +22,7 @@ import {
 } from "../services/progressive-normalize";
 import type { ComplianceRules } from "../types/organization";
 import type { VerificationInput } from "./data-feed-types";
+import { dispatchStatusWebhook } from "../services/outbound-webhook";
 
 /**
  * Manual operator-driven carrier sweep callables.
@@ -282,6 +283,10 @@ export const recordManualSweepResult = onCall(
     const batch = db.batch();
 
     let parsedStatus: PolicyStatus = PolicyStatus.NOT_AVAILABLE;
+    // Captured for the outbound partner webhook (fired after commit).
+    let webhookDashboardStatus: string | null = null;
+    let webhookComplianceIssues: string[] = [];
+    let webhookLienholderListed: boolean | null = null;
 
     if (success) {
       // Dispatch to the carrier-specific normalizer by THIS policy's carrier
@@ -350,6 +355,10 @@ export const recordManualSweepResult = onCall(
       if (parsed.interestedParties.length > 0)
         policyUpdate.interestedParties = parsed.interestedParties;
 
+      webhookDashboardStatus = finalDashboardStatus;
+      webhookComplianceIssues = finalComplianceIssues;
+      webhookLienholderListed = parsed.isLienholderListed;
+
       batch.update(policyRef, policyUpdate);
       batch.update(runRef, { successCount: FieldValue.increment(1) });
     } else {
@@ -384,6 +393,32 @@ export const recordManualSweepResult = onCall(
     batch.set(resultRef, resultDoc);
 
     await batch.commit();
+
+    // Notify the org's partner integration (DMS/CRM), if configured. Strictly
+    // fire-and-forget: webhook delivery must never affect result recording.
+    const policyIdForHook = data.policyId;
+    void (async () => {
+      let loanNumber: string | null = null;
+      if (policy.borrowerId) {
+        const borrowerSnap = await collections.borrowers
+          .doc(policy.borrowerId as string)
+          .get()
+          .catch(() => null);
+        loanNumber = (borrowerSnap?.data()?.loanNumber as string | undefined) ?? null;
+      }
+      await dispatchStatusWebhook(run.organizationId as string, {
+        policyId: policyIdForHook,
+        loanNumber,
+        status: success ? parsedStatus : ((policy.status as string) ?? null),
+        dashboardStatus: webhookDashboardStatus,
+        complianceIssues: webhookComplianceIssues,
+        isLienholderListed: webhookLienholderListed,
+        lastVerifiedAt: success ? new Date().toISOString() : null,
+        lastVerificationError: success ? null : (data.error ?? "Unknown error"),
+        verifiedVia: "manual-operator",
+      });
+    })();
+
     return { ok: true };
   },
 );
