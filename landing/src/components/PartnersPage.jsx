@@ -54,7 +54,7 @@ const partnerBenefits = [
   },
 ];
 
-export default function IntegrationsPage() {
+export default function PartnersPage() {
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white/80">
       {/* Header */}

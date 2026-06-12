@@ -6,7 +6,7 @@ const footerLinks = [
     links: [
       { label: 'Features', href: '#features' },
       { label: 'How It Works', href: '#protocol' },
-      { label: 'Integrations', href: '/integrations' },
+      { label: 'Integrations', href: '#integrations' },
       { label: 'Pricing', href: '#pricing' },
     ],
   },
@@ -14,6 +14,7 @@ const footerLinks = [
     heading: 'Company',
     links: [
       { label: 'Contact', href: '#contact' },
+      { label: 'Partners', href: '/partners' },
       { label: 'Privacy Policy', href: '/privacy' },
       { label: 'Terms & Conditions', href: '/terms' },
     ],

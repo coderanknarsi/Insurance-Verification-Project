@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Plug, ArrowRight, Zap, ShieldCheck } from 'lucide-react';
+import { Plug, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -44,64 +44,94 @@ export default function Integrations() {
             <div className="integrations-reveal inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 mb-6">
               <Plug className="w-3.5 h-3.5 text-accent" />
               <span className="text-xs font-mono uppercase tracking-widest text-accent">
-                For DMS & CRM Platforms
+                Works With Your DMS
               </span>
             </div>
 
             <h2 className="integrations-reveal text-3xl md:text-4xl font-bold text-white leading-tight mb-5">
-              Verification built into the software your dealers already use.
+              Keep using the software you already run.
             </h2>
 
             <p className="integrations-reveal text-white/50 leading-relaxed mb-8">
-              Our Deals API lets any dealer management system or CRM push a new deal
-              the moment it closes. We auto-create the borrower, request proof of
-              insurance, and stream verification status back to your platform — no
-              manual uploads, no double entry.
+              Auto Lien Tracker connects to your dealer management system, so every
+              new deal flows in automatically — no exports, no spreadsheets, no
+              double entry. The moment a deal closes, we ask the borrower for proof
+              of insurance and start verifying coverage for you.
             </p>
 
             <div className="integrations-reveal space-y-3 mb-8">
               <div className="flex items-center gap-3 text-sm text-white/70">
-                <Zap className="w-4 h-4 text-accent shrink-0" />
-                One REST call to push a deal — borrower, vehicle, and policy created automatically.
+                <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
+                New deals sync automatically from your DMS.
               </div>
               <div className="flex items-center gap-3 text-sm text-white/70">
-                <ShieldCheck className="w-4 h-4 text-accent shrink-0" />
-                Signed webhooks deliver live verification status back to your system.
+                <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
+                Borrowers are asked for proof of insurance instantly.
+              </div>
+              <div className="flex items-center gap-3 text-sm text-white/70">
+                <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
+                You see verified coverage without lifting a finger.
               </div>
             </div>
 
-            <a
-              href="/integrations"
-              className="integrations-reveal btn-magnetic inline-flex items-center gap-2 bg-accent text-white text-sm font-semibold px-6 py-3 rounded-full hover:bg-accent/90 transition-all duration-300"
-            >
-              Explore the integration
-              <ArrowRight className="w-4 h-4" />
-            </a>
+            <p className="integrations-reveal text-sm text-white/40">
+              Build a DMS or CRM platform?{' '}
+              <a
+                href="/partners"
+                className="text-accent hover:text-accent/80 inline-flex items-center gap-1 font-medium"
+              >
+                Partner with us
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </p>
           </div>
 
-          {/* Code preview */}
+          {/* Flow visual */}
           <div className="integrations-reveal">
-            <div className="bg-[#0a0e1a] rounded-2xl border border-white/[0.06] overflow-hidden shadow-2xl shadow-black/40">
-              <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/[0.06]">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-400/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-green-400/60" />
-                <span className="ml-3 text-[10px] font-mono text-white/30 uppercase tracking-wider">
-                  POST /v1/deals
-                </span>
-              </div>
-              <pre className="p-5 text-[11px] md:text-xs font-mono leading-relaxed overflow-x-auto">
-{`curl https://api.autolientracker.com/v1/deals \\
-  -H "Authorization: Bearer alt_live_..." \\
-  -d '{
-    `}<span className="text-accent">"borrower"</span>{`: { `}<span className="text-green-400">"name"</span>{`: "Jane Doe" },
-    `}<span className="text-accent">"vehicle"</span>{`:  { `}<span className="text-green-400">"vin"</span>{`: "1HGCM82633A..." },
-    `}<span className="text-accent">"loanNumber"</span>{`: "DLR-90412"
-  }'
+            <div className="bg-[#0a0e1a] rounded-2xl border border-white/[0.06] p-6 md:p-8 shadow-2xl shadow-black/40">
+              <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider mb-6">
+                How a deal flows in
+              </p>
 
-`}<span className="text-white/30">{`# → 201 Created`}</span>{`
-{ `}<span className="text-accent">"policyId"</span>{`: "shtVTZ...", `}<span className="text-accent">"intakeRequested"</span>{`: true }`}
-              </pre>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center text-lg shrink-0">
+                    🏷️
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">Your DMS</p>
+                    <p className="text-xs text-white/40">A deal closes</p>
+                  </div>
+                </div>
+
+                <div className="ml-5 h-5 border-l border-dashed border-white/15" />
+
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-lg shrink-0">
+                    🔗
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">Auto Lien Tracker</p>
+                    <p className="text-xs text-white/40">
+                      Borrower added · insurance requested
+                    </p>
+                  </div>
+                </div>
+
+                <div className="ml-5 h-5 border-l border-dashed border-white/15" />
+
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center text-lg shrink-0">
+                    ✓
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">Coverage verified</p>
+                    <p className="text-xs text-white/40">
+                      Monitored for lapses automatically
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

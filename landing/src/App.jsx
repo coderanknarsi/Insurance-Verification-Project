@@ -10,14 +10,14 @@ import Contact from './components/Contact';
 import Footer from './components/Footer';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsConditions from './components/TermsConditions';
-import IntegrationsPage from './components/IntegrationsPage';
+import PartnersPage from './components/PartnersPage';
 
 export default function App() {
   const path = window.location.pathname;
 
   if (path === '/privacy') return <PrivacyPolicy />;
   if (path === '/terms') return <TermsConditions />;
-  if (path === '/integrations') return <IntegrationsPage />;
+  if (path === '/partners') return <PartnersPage />;
 
   return (
     <>

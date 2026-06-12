@@ -7,7 +7,7 @@ const SIGNUP_URL = `${DASHBOARD_BASE}?mode=signup`;
 const navLinks = [
   { label: 'Features', href: '#features' },
   { label: 'How It Works', href: '#protocol' },
-  { label: 'Integrations', href: '/integrations' },
+  { label: 'Integrations', href: '#integrations' },
   { label: 'Pricing', href: '#pricing' },
 ];
 
