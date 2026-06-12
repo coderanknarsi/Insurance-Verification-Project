@@ -6,10 +6,14 @@
 # NOTE: keep patterns conservative. Do NOT use broad globs like **/lib/ —
 # that would wrongly exclude frontend/src/lib (app source code).
 
-# Sibling monorepo projects not built by this Vercel project
+# Sibling monorepo projects not built by this Vercel project.
+# NOTE: do NOT exclude landing/ — it is its own Vercel project (Root Directory
+# `landing`) that deploys via git, and .vercelignore is shared repo-wide, so
+# excluding it strips the landing project's source and breaks its deploys.
+# landing/ is small source (no committed build artifacts), so leaving it in the
+# dashboard CLI upload is well under the 100 MB cap.
 operator/
 engine/
-landing/
 functions/
 extension/
 docs/
