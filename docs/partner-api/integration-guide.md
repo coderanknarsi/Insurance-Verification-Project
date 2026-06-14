@@ -33,7 +33,7 @@ AutoLien during onboarding.
 ## 2. Push a deal
 
 ```
-POST https://us-central1-insurance-track-os.cloudfunctions.net/partnerDealsApi/v1/deals
+POST https://api.autolientracker.com/v1/deals
 Authorization: Bearer alt_live_xxxxxxxx
 Idempotency-Key: deal-48213-attempt-1
 Content-Type: application/json

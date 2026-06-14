@@ -21,7 +21,7 @@ info:
     URL. See the `WebhookEvent` schema and the integration guide for
     signature verification.
 servers:
-  - url: https://us-central1-insurance-track-os.cloudfunctions.net/partnerDealsApi
+  - url: https://api.autolientracker.com
 security:
   - bearerAuth: []
 paths:
