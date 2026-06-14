@@ -3,6 +3,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "api.autolientracker.com" }],
+      "destination": "https://us-central1-insurance-track-os.cloudfunctions.net/partnerDealsApi/$1"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
