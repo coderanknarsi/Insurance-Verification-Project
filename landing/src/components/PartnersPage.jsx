@@ -156,16 +156,18 @@ export default function PartnersPage() {
   -H "Idempotency-Key: DLR-90412" \\
   -d '{
     `}<span className="text-accent">"borrower"</span>{`: {
-      `}<span className="text-green-400">"name"</span>{`:  "Jane Doe",
-      `}<span className="text-green-400">"phone"</span>{`: "+13105551234"
+      `}<span className="text-green-400">"firstName"</span>{`:  "Jane",
+      `}<span className="text-green-400">"lastName"</span>{`:   "Doe",
+      `}<span className="text-green-400">"email"</span>{`:      "jane@example.com",
+      `}<span className="text-green-400">"phone"</span>{`:      "+13105551234",
+      `}<span className="text-green-400">"loanNumber"</span>{`: "DLR-90412"
     },
     `}<span className="text-accent">"vehicle"</span>{`: {
       `}<span className="text-green-400">"vin"</span>{`:   "1HGCM82633A004352",
       `}<span className="text-green-400">"year"</span>{`:  2023,
       `}<span className="text-green-400">"make"</span>{`:  "Honda",
       `}<span className="text-green-400">"model"</span>{`: "Accord"
-    },
-    `}<span className="text-accent">"loanNumber"</span>{`: "DLR-90412"
+    }
   }'
 
 `}<span className="text-white/30">{`# → 201 Created`}</span>{`
