@@ -41,6 +41,7 @@ import type {
   BorrowerWithVehicles,
   ComplianceRules,
   OrganizationProfile,
+  OrgVerificationStatus,
 } from "@/lib/api";
 
 const MARKETING_SITE_URL = process.env.NEXT_PUBLIC_MARKETING_SITE_URL ?? "https://autolientracker.com";
@@ -60,6 +61,7 @@ export default function Home() {
   const [activeNav, setActiveNav] = useState("dashboard");
   const [selectedBorrower, setSelectedBorrower] = useState<BorrowerWithVehicles | null>(null);
   const [allBorrowers, setAllBorrowers] = useState<BorrowerWithVehicles[]>([]);
+  const [overduePolicyIds, setOverduePolicyIds] = useState<Set<string>>(new Set());
   const [borrowerFilter, setBorrowerFilter] = useState<StatusFilter>("ALL");
   const [refreshKey, setRefreshKey] = useState(0);
   const borrowerTableRef = useRef<HTMLDivElement>(null);
@@ -152,6 +154,10 @@ export default function Home() {
   const handleSignOut = async () => {
     await signOut(getClientAuth());
   };
+
+  const handleVerificationStatusLoaded = useCallback((status: OrgVerificationStatus) => {
+    setOverduePolicyIds(new Set(status.overduePolicyIds));
+  }, []);
 
   const handleTryDemo = useCallback(async () => {
     setDemoLoading(true);
@@ -449,7 +455,10 @@ export default function Home() {
           {activeNav === "dashboard" && organizationId && (
             <>
               <SweepReminderBanner organizationId={organizationId} />
-              <DashboardHeaderStrip organizationId={organizationId} />
+              <DashboardHeaderStrip
+                organizationId={organizationId}
+                onStatusLoaded={handleVerificationStatusLoaded}
+              />
               <DashboardSummary
                 organizationId={organizationId}
                 onFilterChange={(f) => {
@@ -471,6 +480,7 @@ export default function Home() {
                   onFilterChange={setBorrowerFilter}
                   refreshKey={refreshKey}
                   spotlightAddBorrower={isDemo && !hasTestBorrower}
+                  overduePolicyIds={overduePolicyIds}
                 />
               </div>
             </>

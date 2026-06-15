@@ -47,6 +47,8 @@ interface BorrowerTableProps {
   refreshKey?: number;
   /** When true, highlight the Add Borrower button with a pulsing ring (demo first-run guidance). */
   spotlightAddBorrower?: boolean;
+  /** Policy IDs flagged overdue for verification (>8 days stale); rows render an "Overdue" badge. */
+  overduePolicyIds?: Set<string>;
 }
 
 const filterTabs: { value: StatusFilter; label: string; dotColor?: string }[] = [
@@ -126,7 +128,7 @@ function daysUntil(dateStr?: string): number | null {
   return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoaded, externalFilter, onFilterChange, refreshKey, spotlightAddBorrower }: BorrowerTableProps) {
+export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoaded, externalFilter, onFilterChange, refreshKey, spotlightAddBorrower, overduePolicyIds }: BorrowerTableProps) {
   const { user: currentUser } = useAuth();
   const [borrowers, setBorrowers] = useState<BorrowerWithVehicles[]>([]);
   const [internalFilter, setInternalFilter] = useState<StatusFilter>("ALL");
@@ -570,6 +572,7 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                   const issues = policy?.complianceIssues ?? [];
                   const expEnd = policy?.coveragePeriod?.endDate;
                   const daysLeft = daysUntil(expEnd);
+                  const isOverdue = !!policy?.id && !!overduePolicyIds?.has(policy.id);
 
                   return (
                     <TableRow
@@ -668,6 +671,16 @@ export function BorrowerTable({ organizationId, onSelectBorrower, onBorrowersLoa
                               state={borrower.verificationState}
                               lastVerifiedAt={borrower.lastVerifiedAt}
                             />
+                          </div>
+                        )}
+                        {isOverdue && (
+                          <div className="mt-1">
+                            <span
+                              title="Last successful verification is more than 8 days old. The status shown may be stale."
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300"
+                            >
+                              Overdue
+                            </span>
                           </div>
                         )}
                       </TableCell>

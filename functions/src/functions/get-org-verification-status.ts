@@ -9,6 +9,7 @@ import {
   normalizeCarrier,
   VerificationState,
 } from "../services/verification-eligibility";
+import { isVerificationStale } from "../services/verification-staleness";
 
 interface GetOrgVerificationStatusInput {
   organizationId: string;
@@ -29,6 +30,10 @@ interface GetOrgVerificationStatusResponse {
     insuredUnsupported: number;
     insuredNoCreds: number;
   };
+  /** Count of in-scope (actively-verified) policies whose data is overdue. */
+  staleCount: number;
+  /** IDs of overdue policies (capped at 100) for per-row badges. */
+  overduePolicyIds: string[];
 }
 
 /**
@@ -84,9 +89,14 @@ export const getOrgVerificationStatus = onCall(
       insuredUnsupported: 0,
       insuredNoCreds: 0,
     };
+    const OVERDUE_ID_CAP = 100;
+    let staleCount = 0;
+    const overduePolicyIds: string[] = [];
+    const now = Date.now();
     for (const policyDoc of policiesSnap.docs) {
+      const policyData = policyDoc.data();
       const state = getPolicyVerificationState(
-        policyDoc.data() as never,
+        policyData as never,
         data.organizationId,
         activeCarriers,
       );
@@ -103,6 +113,21 @@ export const getOrgVerificationStatus = onCall(
         case VerificationState.INSURED_NO_CREDS:
           counts.insuredNoCreds++;
           break;
+      }
+
+      // Staleness only applies to policies we actively verify (INSURED_SUPPORTED).
+      // Flagging unsupported / no-creds policies as "stale" would be misleading —
+      // those are surfaced via coverage-only labeling and credential nudges.
+      const inScope = state === VerificationState.INSURED_SUPPORTED;
+      const lastVerifiedAt = policyData.lastVerifiedAt as
+        | { toMillis?: () => number }
+        | undefined;
+      const lastVerifiedAtMs = lastVerifiedAt?.toMillis?.() ?? null;
+      if (isVerificationStale({ lastVerifiedAtMs, inScope }, now)) {
+        staleCount++;
+        if (overduePolicyIds.length < OVERDUE_ID_CAP) {
+          overduePolicyIds.push(policyDoc.id);
+        }
       }
     }
 
@@ -132,6 +157,8 @@ export const getOrgVerificationStatus = onCall(
       nextSweepAt: nextSweepAtMs(day),
       lastSweepAt,
       inScopeCounts: counts,
+      staleCount,
+      overduePolicyIds,
     };
   },
 );

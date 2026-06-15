@@ -437,6 +437,10 @@ export interface OrgVerificationStatus {
     insuredUnsupported: number;
     insuredNoCreds: number;
   };
+  /** Count of actively-verified policies whose data is overdue (stale). */
+  staleCount: number;
+  /** IDs of overdue policies (capped at 100) for per-row badges. */
+  overduePolicyIds: string[];
 }
 
 export function callGetOrgVerificationStatus(data: { organizationId: string }) {
