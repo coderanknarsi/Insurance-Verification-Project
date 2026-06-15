@@ -75,12 +75,12 @@ export default function Integrations() {
             </div>
 
             <p className="integrations-reveal text-sm text-white/40">
-              Build a DMS or CRM platform?{' '}
+              Run a dealer software platform?{' '}
               <a
                 href="/partners"
                 className="text-accent hover:text-accent/80 inline-flex items-center gap-1 font-medium"
               >
-                Partner with us
+                Let&rsquo;s integrate
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
             </p>
