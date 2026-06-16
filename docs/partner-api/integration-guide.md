@@ -30,6 +30,20 @@ Keys are scoped to one dealership. A multi-dealer integration uses one key per
 dealership; key management for partners with many dealers is coordinated with
 AutoLien during onboarding.
 
+### Test mode (sandbox keys)
+
+Alongside your live key you can request a **test key** (`alt_test_…`). Test keys
+hit the same endpoints and return the same response shapes, but run in dry-run:
+
+- `POST /v1/deals` validates your payload (you still get real `422` errors) but
+  **persists nothing** and triggers **no SMS, no webhook, no verification**. The
+  response echoes synthetic `test_…` IDs and `"mode": "test"`.
+- `GET /v1/deals/{policyId}` returns a synthetic `ACTIVE`/`GREEN` sample for any
+  `test_…` policyId.
+
+Use test keys to build and CI your integration without touching production
+borrowers. Switch to your `alt_live_` key when you're ready to go live.
+
 ## 2. Push a deal
 
 ```
@@ -144,7 +158,9 @@ All errors are JSON: `{ "error": { "code": "...", "message": "..." } }`
 | 401  | unauthorized       | missing / invalid / revoked API key      |
 | 404  | not_found          | unknown endpoint or policy               |
 | 405  | method_not_allowed | wrong HTTP verb                          |
+| 413  | invalid_request    | request body exceeds the size limit      |
 | 422  | invalid_request    | payload failed validation                |
+| 429  | rate_limited       | too many requests — honor `Retry-After`  |
 | 500  | internal           | our fault — retry with the same Idempotency-Key |
 
 ## Minimum data contract

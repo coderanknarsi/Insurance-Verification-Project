@@ -14,15 +14,30 @@ import { db } from "../config/firebase";
  *   label           - human-readable name ("Frazer integration")
  *   createdAt / createdBy / lastUsedAt / revokedAt
  *
- * Raw key format: alt_live_<43 chars base64url> — shown once at creation.
+ * Raw key format: alt_live_<43 chars base64url> (production) or
+ * alt_test_<…> (sandbox) — shown once at creation.
  */
 
-const KEY_PREFIX = "alt_live_";
+export const LIVE_PREFIX = "alt_live_";
+export const TEST_PREFIX = "alt_test_";
+
+export type ApiKeyMode = "live" | "test";
+
+/** True when the raw key starts with a recognized AutoLien prefix. */
+export function isKnownKeyPrefix(raw: string): boolean {
+  return raw.startsWith(LIVE_PREFIX) || raw.startsWith(TEST_PREFIX);
+}
+
+/** Map a raw key to its mode. Test keys carry the sandbox prefix; all else is live. */
+export function keyMode(raw: string): ApiKeyMode {
+  return raw.startsWith(TEST_PREFIX) ? "test" : "live";
+}
 
 export interface ApiKeyContext {
   keyId: string;
   organizationId: string;
   label: string;
+  mode: ApiKeyMode;
 }
 
 export interface GeneratedApiKey {
@@ -36,12 +51,13 @@ export function hashApiKey(rawKey: string): string {
 }
 
 /** Mint a new raw key + Firestore doc fields. Caller persists the doc. */
-export function generateApiKey(): GeneratedApiKey {
-  const rawKey = KEY_PREFIX + crypto.randomBytes(32).toString("base64url");
+export function generateApiKey(mode: ApiKeyMode = "live"): GeneratedApiKey {
+  const prefix = mode === "test" ? TEST_PREFIX : LIVE_PREFIX;
+  const rawKey = prefix + crypto.randomBytes(32).toString("base64url");
   return {
     keyId: db.collection("apiKeys").doc().id,
     rawKey,
-    prefix: rawKey.slice(0, KEY_PREFIX.length + 6),
+    prefix: rawKey.slice(0, prefix.length + 6),
   };
 }
 
@@ -69,7 +85,7 @@ export async function requireApiKey(req: Request): Promise<ApiKeyContext> {
   if (!rawKey) {
     throw new ApiKeyError(401, "Missing API key. Send Authorization: Bearer <key>.");
   }
-  if (!rawKey.startsWith(KEY_PREFIX)) {
+  if (!isKnownKeyPrefix(rawKey)) {
     throw new ApiKeyError(401, "Invalid API key.");
   }
 
@@ -101,5 +117,6 @@ export async function requireApiKey(req: Request): Promise<ApiKeyContext> {
     keyId: doc.id,
     organizationId: data.organizationId as string,
     label: (data.label as string) ?? "",
+    mode: (data.mode as ApiKeyMode) ?? keyMode(rawKey),
   };
 }

@@ -1,3 +1,4 @@
+import * as crypto from "crypto";
 import { onRequest, HttpsError } from "firebase-functions/v2/https";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
@@ -83,6 +84,24 @@ async function handlePostDeal(
     return { status: 422, body: errorBody("invalid_request", message) };
   }
 
+  // Sandbox keys (alt_test_) get full validation but no persistence and no
+  // side effects (no SMS, no webhook, no idempotency record). We echo a
+  // synthetic, clearly-fake response so partners can build against it safely.
+  if (ctx.mode === "test") {
+    const stub = crypto.randomBytes(8).toString("hex");
+    return {
+      status: 201,
+      body: {
+        policyId: `test_${stub}`,
+        borrowerId: `test_${stub}`,
+        vehicleId: `test_${stub}`,
+        isNewBorrower: true,
+        intakeRequested: false,
+        mode: "test",
+      },
+    };
+  }
+
   // Idempotency replay: same key + same Idempotency-Key returns the original
   // response without re-running ingestion.
   const idemRef = idempotencyKey
@@ -124,6 +143,30 @@ async function handleGetDeal(
   ctx: ApiKeyContext,
   policyId: string,
 ): Promise<{ status: number; body: unknown }> {
+  // Sandbox keys never touch real data. A `test_` policyId echoes a
+  // synthetic ACTIVE/GREEN sample; anything else is "not found".
+  if (ctx.mode === "test") {
+    if (!policyId.startsWith("test_")) {
+      return { status: 404, body: errorBody("not_found", "Deal not found.") };
+    }
+    return {
+      status: 200,
+      body: {
+        policyId,
+        loanNumber: "TEST-0000",
+        status: "ACTIVE",
+        dashboardStatus: "GREEN",
+        complianceIssues: [],
+        isLienholderListed: true,
+        insuranceProvider: "Test Mutual",
+        policyNumber: "TEST-POLICY-0000",
+        lastVerifiedAt: new Date().toISOString(),
+        lastVerificationError: null,
+        mode: "test",
+      },
+    };
+  }
+
   const snap = await collections.policies.doc(policyId).get();
   if (!snap.exists) {
     return { status: 404, body: errorBody("not_found", "Deal not found.") };

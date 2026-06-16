@@ -17,6 +17,7 @@ import { generateApiKey, hashApiKey } from "../middleware/api-key";
 interface IssueApiKeyRequest {
   organizationId: string;
   label?: string;
+  mode?: "live" | "test";
 }
 
 export const issuePartnerApiKey = onCall(
@@ -34,12 +35,14 @@ export const issuePartnerApiKey = onCall(
       throw new HttpsError("not-found", `Organization ${data.organizationId} not found`);
     }
 
-    const { keyId, rawKey, prefix } = generateApiKey();
+    const mode = data.mode === "test" ? "test" : "live";
+    const { keyId, rawKey, prefix } = generateApiKey(mode);
     await db.collection("apiKeys").doc(keyId).set({
       organizationId: data.organizationId,
       hashedKey: hashApiKey(rawKey),
       prefix,
       label: data.label ?? "",
+      mode,
       createdAt: Timestamp.now(),
       createdBy: request.auth?.uid ?? "unknown",
       lastUsedAt: null,
@@ -47,11 +50,11 @@ export const issuePartnerApiKey = onCall(
     });
 
     logger.info(
-      `[partner-api] Issued API key ${keyId} (${prefix}…) for org ${data.organizationId}`,
+      `[partner-api] Issued ${mode} API key ${keyId} (${prefix}…) for org ${data.organizationId}`,
     );
 
     // rawKey is shown once and never persisted.
-    return { keyId, rawKey, prefix };
+    return { keyId, rawKey, prefix, mode };
   },
 );
 
@@ -99,6 +102,7 @@ export const listPartnerApiKeys = onCall(
         organizationId: k.organizationId,
         prefix: k.prefix,
         label: k.label ?? "",
+        mode: k.mode ?? "live",
         createdAt: k.createdAt?.toDate?.()?.toISOString?.() ?? null,
         lastUsedAt: k.lastUsedAt?.toDate?.()?.toISOString?.() ?? null,
         revoked: !!k.revokedAt,
