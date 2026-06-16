@@ -4,6 +4,7 @@ import { logger } from "firebase-functions/v2";
 import { db } from "../config/firebase";
 import { collections } from "../config/firestore";
 import { ApiKeyError, requireApiKey, type ApiKeyContext } from "../middleware/api-key";
+import { rateLimit } from "../middleware/rate-limit";
 import {
   ingestDeal,
   validateDealIngestInput,
@@ -42,6 +43,26 @@ function errorBody(code: string, message: string): unknown {
 }
 
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+/**
+ * Max accepted request body, in bytes. A single deal is a few KB; 256 KB is a
+ * generous ceiling that still rejects abusive/oversized payloads before they
+ * reach ingestion.
+ */
+export const MAX_BODY_BYTES = 256 * 1024;
+
+/** Throws HttpsError("invalid-argument") when a body exceeds MAX_BODY_BYTES. */
+export function assertPayloadWithinLimit(len: number): void {
+  if (len > MAX_BODY_BYTES) {
+    throw new HttpsError("invalid-argument", "Request payload too large.");
+  }
+}
+
+// Rate limit per API key: 120 requests/minute is comfortable for a DMS
+// pushing deals in bursts while still throttling runaway clients.
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 120;
+const RATE_LIMIT_RETRY_AFTER_S = 60;
 
 async function handlePostDeal(
   ctx: ApiKeyContext,
@@ -154,6 +175,35 @@ export const partnerDealsApi = onRequest(
 
       const ctx = await requireApiKey(req);
       const policyId = dealMatch[1];
+
+      // Per-key rate limit. Best-effort (in-memory per instance); throws
+      // HttpsError("resource-exhausted") when exceeded.
+      try {
+        rateLimit(`partnerApi:${ctx.keyId}`, {
+          windowMs: RATE_LIMIT_WINDOW_MS,
+          max: RATE_LIMIT_MAX,
+        });
+      } catch (rlErr) {
+        if (rlErr instanceof HttpsError && rlErr.code === "resource-exhausted") {
+          res.set("Retry-After", String(RATE_LIMIT_RETRY_AFTER_S));
+          sendJson(res, 429, errorBody("rate_limited", rlErr.message));
+          return;
+        }
+        throw rlErr;
+      }
+
+      // Reject oversized bodies before doing any work.
+      const rawLen = req.rawBody
+        ? req.rawBody.length
+        : Buffer.byteLength(JSON.stringify(req.body ?? {}));
+      try {
+        assertPayloadWithinLimit(rawLen);
+      } catch (sizeErr) {
+        const message =
+          sizeErr instanceof HttpsError ? sizeErr.message : "Request payload too large.";
+        sendJson(res, 413, errorBody("invalid_request", message));
+        return;
+      }
 
       if (req.method === "POST" && !policyId) {
         const out = await handlePostDeal(
