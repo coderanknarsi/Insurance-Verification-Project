@@ -625,6 +625,37 @@ export async function sendSweepReminderEmail(input: {
   return { id: data?.id ?? "", success: true };
 }
 
+/**
+ * Post-sweep recap for the dealer's admins: how many policies were verified,
+ * how many failed, and how many surfaced a compliance issue. Closes the
+ * "borrower gets told, dealer doesn't" gap so a failed or partial sweep can't
+ * pass silently.
+ */
+export async function sendDealerSweepAlertEmail(input: {
+  to: string;
+  subject: string;
+  title: string;
+  lines: string[];
+  dashboardUrl: string;
+}): Promise<EmailResult> {
+  const details = `
+    ${input.lines.map((l) => `<p style="margin:0 0 12px;">${l}</p>`).join("\n    ")}
+    <p style="margin:16px 0 0;"><a href="${input.dashboardUrl}" style="color:#3b82f6;">Open dashboard →</a></p>
+  `;
+  const resend = getResend();
+  const { data, error } = await resend.emails.send({
+    from: fromEmail.value(),
+    to: input.to,
+    subject: input.subject,
+    html: adminAlertHtml(input.title, details),
+  });
+  if (error) {
+    console.error("Failed to send dealer sweep alert:", error.message);
+    return { id: "", success: false, error: error.message };
+  }
+  return { id: data?.id ?? "", success: true };
+}
+
 // ─── Intake Validation Alert (lender-side) ──────────────────────
 
 /**

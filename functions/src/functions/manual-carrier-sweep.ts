@@ -23,6 +23,7 @@ import {
 import type { ComplianceRules } from "../types/organization";
 import type { VerificationInput } from "./data-feed-types";
 import { dispatchStatusWebhook } from "../services/outbound-webhook";
+import { dispatchDealerSweepAlert } from "../services/dealer-sweep-alert";
 
 /**
  * Manual operator-driven carrier sweep callables.
@@ -457,6 +458,21 @@ export const finalizeManualSweep = onCall(
     logger.info(
       `[manual-sweep] Finalize runId=${data.runId} status=${data.status ?? "completed"}`,
     );
+
+    // Recap email to the dealer's admins so a failed/partial sweep can't pass
+    // silently. Best-effort, fire-and-forget, and sent at most once per run.
+    if (!run.dealerAlertSentAt) {
+      const verified = (run.successCount as number) ?? 0;
+      const failed = (run.errorCount as number) ?? 0;
+      const total = (run.totalPolicies as number) ?? verified + failed;
+      void dispatchDealerSweepAlert(run.organizationId as string, data.runId, {
+        total,
+        verified,
+        failed,
+        issuesFound: 0,
+      });
+    }
+
     return { ok: true };
   },
 );
