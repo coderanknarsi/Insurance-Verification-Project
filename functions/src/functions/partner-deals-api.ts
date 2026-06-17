@@ -205,19 +205,55 @@ async function handleGetDeal(
   };
 }
 
+const DELIVERIES_LIMIT = 50;
+
+async function handleGetWebhookDeliveries(
+  ctx: ApiKeyContext,
+): Promise<{ status: number; body: unknown }> {
+  // Sandbox keys never produce real deliveries; return an empty list.
+  if (ctx.mode === "test") {
+    return { status: 200, body: { deliveries: [] } };
+  }
+
+  const ts = (v: unknown): string | null =>
+    (v as Timestamp | undefined)?.toDate?.()?.toISOString?.() ?? null;
+
+  const snap = await db
+    .collection("webhookDeliveries")
+    .where("organizationId", "==", ctx.organizationId)
+    .orderBy("createdAt", "desc")
+    .limit(DELIVERIES_LIMIT)
+    .get();
+
+  const deliveries = snap.docs.map((d) => {
+    const w = d.data();
+    return {
+      policyId: (w.policyId as string) ?? null,
+      event: (w.event as string) ?? null,
+      finalStatus: (w.finalStatus as number | null) ?? (w.httpStatus as number | null) ?? null,
+      attempts: (w.attempts as number | null) ?? null,
+      createdAt: ts(w.createdAt),
+      lastError: (w.lastError as string | null) ?? (w.error as string | null) ?? null,
+    };
+  });
+
+  return { status: 200, body: { deliveries } };
+}
+
 export const partnerDealsApi = onRequest(
   { region: "us-central1", timeoutSeconds: 60, memory: "256MiB" },
   async (req, res) => {
     try {
       const path = (req.path || "/").replace(/\/+$/, "") || "/";
       const dealMatch = path.match(/^\/v1\/deals(?:\/([^/]+))?$/);
-      if (!dealMatch) {
+      const isWebhookDeliveries = path === "/v1/webhooks/deliveries";
+      if (!dealMatch && !isWebhookDeliveries) {
         sendJson(res, 404, errorBody("not_found", "Unknown endpoint."));
         return;
       }
 
       const ctx = await requireApiKey(req);
-      const policyId = dealMatch[1];
+      const policyId = dealMatch?.[1];
 
       // Per-key rate limit. Best-effort (in-memory per instance); throws
       // HttpsError("resource-exhausted") when exceeded.
@@ -260,6 +296,12 @@ export const partnerDealsApi = onRequest(
 
       if (req.method === "GET" && policyId) {
         const out = await handleGetDeal(ctx, policyId);
+        sendJson(res, out.status, out.body);
+        return;
+      }
+
+      if (req.method === "GET" && isWebhookDeliveries) {
+        const out = await handleGetWebhookDeliveries(ctx);
         sendJson(res, out.status, out.body);
         return;
       }

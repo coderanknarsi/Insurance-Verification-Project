@@ -136,8 +136,34 @@ function verify(req, secret) {
 }
 ```
 
-Respond with any 2xx within 10 seconds. Non-2xx responses are logged; delivery
-is best-effort, so also poll if you need guaranteed consistency.
+Respond with any 2xx within 10 seconds. Delivery is retried up to 3 times with
+backoff (immediately, then +2s, +8s) on non-2xx responses or network errors;
+the final outcome is recorded. It remains best-effort, so also poll if you need
+guaranteed consistency.
+
+### Inspecting deliveries
+
+```
+GET /v1/webhooks/deliveries
+Authorization: Bearer alt_live_xxxxxxxx
+```
+
+Returns your 50 most recent webhook deliveries (org-scoped):
+
+```json
+{
+  "deliveries": [
+    {
+      "policyId": "abc123",
+      "event": "policy.verification.updated",
+      "finalStatus": 200,
+      "attempts": 1,
+      "createdAt": "2026-06-12T18:30:01.000Z",
+      "lastError": null
+    }
+  ]
+}
+```
 
 ## 4. Poll status (alternative to webhooks)
 

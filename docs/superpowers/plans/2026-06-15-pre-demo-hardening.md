@@ -397,7 +397,7 @@ git commit -m "feat(partner-api): add alt_test_ sandbox keys with dry-run ingest
 - Create: `functions/test/outbound-webhook-retry.test.js`
 - Modify: `functions/src/functions/partner-deals-api.ts` (route `GET /v1/webhooks/deliveries`)
 
-- [ ] **Step E1: Write the failing test for retry/backoff decision**
+- [x] **Step E1: Write the failing test for retry/backoff decision**
 
 Create `functions/test/outbound-webhook-retry.test.js` testing a pure `shouldRetry(status, attempt, maxAttempts)` + `backoffMs(attempt)`:
 
@@ -420,12 +420,12 @@ test("backoff grows with attempt", () => {
 });
 ```
 
-- [ ] **Step E2: Run the test to confirm it fails**
+- [x] **Step E2: Run the test to confirm it fails**
 
 Run: `cd functions; npm run build; node --test test/outbound-webhook-retry.test.js`
 Expected: FAIL — helpers not exported.
 
-- [ ] **Step E3: Implement retry helpers + loop**
+- [x] **Step E3: Implement retry helpers + loop**
 
 In `functions/src/services/outbound-webhook.ts`:
 - `export const MAX_WEBHOOK_ATTEMPTS = 3;`
@@ -434,12 +434,12 @@ In `functions/src/services/outbound-webhook.ts`:
 - Wrap the single fetch in a loop up to `MAX_WEBHOOK_ATTEMPTS`, awaiting `backoffMs` between attempts (use a small `sleep` helper). Keep the overall function non-throwing.
 - Record `attempts`, `finalStatus`, and `lastError` on the `webhookDeliveries` doc.
 
-- [ ] **Step E4: Run the test to confirm it passes**
+- [x] **Step E4: Run the test to confirm it passes**
 
 Run: `cd functions; npm run build; node --test test/outbound-webhook-retry.test.js`
 Expected: PASS (3/3).
 
-- [ ] **Step E5: Add GET /v1/webhooks/deliveries to the partner API**
+- [x] **Step E5: Add GET /v1/webhooks/deliveries to the partner API**
 
 In `functions/src/functions/partner-deals-api.ts`:
 - Add a route match for `GET /v1/webhooks/deliveries`.
@@ -447,13 +447,13 @@ In `functions/src/functions/partner-deals-api.ts`:
 - Return `{ deliveries: [{ policyId, event, finalStatus, attempts, createdAt, lastError }] }` (timestamps as ISO).
 - Ensure tenant isolation (never return another org's deliveries).
 
-- [ ] **Step E6: Build and deploy**
+- [x] **Step E6: Build and deploy**
 
 Run: `cd functions; npm run build`
 Then from repo root: `firebase deploy --only functions:partnerDealsApi`
 Expected: deploy succeeds. (The webhook service is bundled with whatever functions import it — redeploy `recordManualSweepResult` too if it dispatches webhooks.)
 
-- [ ] **Step E7: Commit**
+- [x] **Step E7: Commit**
 
 ```powershell
 git add functions/src/services/outbound-webhook.ts functions/test/outbound-webhook-retry.test.js functions/src/functions/partner-deals-api.ts

@@ -37,6 +37,27 @@ export interface PolicyStatusWebhookPayload {
 
 const WEBHOOK_TIMEOUT_MS = 10_000;
 
+/**
+ * Bounded retry policy. Attempts: immediate, +2s, +8s. Non-2xx responses and
+ * network errors (modeled as status 0) are retryable; 2xx is terminal.
+ */
+export const MAX_WEBHOOK_ATTEMPTS = 3;
+
+/** True when another delivery attempt should be made. */
+export function shouldRetry(status: number, attempt: number, max: number): boolean {
+  if (status >= 200 && status < 300) return false;
+  return attempt < max;
+}
+
+/** Delay before the Nth attempt (1-indexed). attempt 1 = 0ms, 2 = 2s, 3 = 8s. */
+export function backoffMs(attempt: number): number {
+  return [0, 2000, 8000][attempt - 1] ?? 8000;
+}
+
+function sleep(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
 export function signWebhookBody(
   secret: string,
   timestamp: string,
@@ -74,44 +95,61 @@ export async function dispatchStatusWebhook(
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = `v1=${signWebhookBody(secret, timestamp, rawBody)}`;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+    // Deliver with bounded retries. Each attempt re-signs nothing (the body and
+    // timestamp are fixed for the event); receivers tolerate a small clock skew.
     let status = 0;
-    let error: string | null = null;
-    try {
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-AutoLien-Timestamp": timestamp,
-          "X-AutoLien-Signature": signature,
-        },
-        body: rawBody,
-        signal: controller.signal,
-      });
-      status = resp.status;
-      if (!resp.ok) error = `HTTP ${resp.status}`;
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-    } finally {
-      clearTimeout(timer);
+    let lastError: string | null = null;
+    let attempts = 0;
+    for (let attempt = 1; attempt <= MAX_WEBHOOK_ATTEMPTS; attempt += 1) {
+      await sleep(backoffMs(attempt));
+      attempts = attempt;
+      status = 0;
+      lastError = null;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+      try {
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-AutoLien-Timestamp": timestamp,
+            "X-AutoLien-Signature": signature,
+          },
+          body: rawBody,
+          signal: controller.signal,
+        });
+        status = resp.status;
+        if (!resp.ok) lastError = `HTTP ${resp.status}`;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (!shouldRetry(status, attempt, MAX_WEBHOOK_ATTEMPTS)) break;
     }
 
+    const finalStatus = status >= 200 && status < 300 ? status : status || 0;
     await db.collection("webhookDeliveries").add({
       organizationId,
       url,
       event: body.event,
       policyId: payload.policyId,
       httpStatus: status || null,
-      error,
+      finalStatus: finalStatus || null,
+      attempts,
+      error: lastError,
+      lastError,
       createdAt: Timestamp.now(),
     });
 
-    if (error) {
+    if (lastError) {
       logger.warn("[outbound-webhook] delivery failed", {
         organizationId,
         policyId: payload.policyId,
-        error,
+        attempts,
+        error: lastError,
       });
     }
   } catch (err) {
