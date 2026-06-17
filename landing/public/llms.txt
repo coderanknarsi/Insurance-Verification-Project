@@ -1,0 +1,31 @@
+# Auto Lien Tracker
+
+> Automated auto-insurance verification and lapse detection for lenders. Auto Lien Tracker continuously monitors borrower insurance policies for Buy-Here-Pay-Here (BHPH) dealers, banks, and credit unions, alerting lienholders the moment coverage lapses or a lienholder is removed — so collateral is never silently unprotected.
+
+Auto Lien Tracker is a SaaS platform that connects to insurance carriers, verifies active coverage, confirms the lender is listed as lienholder, and surfaces compliance issues on a real-time dashboard. It also offers a partner REST API so dealer management systems (DMS) and CRMs can push funded deals and receive verification status via webhooks.
+
+## Product
+
+- [Homepage](https://autolientracker.com/): Overview of automated insurance monitoring for lenders.
+- [Features](https://autolientracker.com/#features): Borrower intake & OCR, carrier verification, and a compliance dashboard.
+- [Pricing](https://autolientracker.com/#pricing): Plans for dealers, banks, and credit unions.
+- [Integrations](https://autolientracker.com/#integrations): Partner API and DMS/CRM connections.
+
+## How it works
+
+- Borrower intake collects insurance details via a secure link, with OCR of insurance documents.
+- Carrier verification confirms active coverage and lienholder status with supported insurers.
+- A compliance dashboard flags lapses, expirations, and missing-lienholder issues in real time.
+- Webhooks notify connected partner systems when a policy's verification status changes.
+
+## For partners and developers
+
+- [Partner API integration guide](https://autolientracker.com/partners): How a DMS or CRM pushes deals and receives status webhooks.
+- API base URL: https://api.autolientracker.com
+- Authentication uses per-dealership API keys (`alt_live_…` for production, `alt_test_…` for sandbox/testing).
+
+## Company
+
+- [Contact](https://autolientracker.com/#contact): Get in touch or request a demo.
+- [Privacy Policy](https://autolientracker.com/privacy)
+- [Terms & Conditions](https://autolientracker.com/terms)
