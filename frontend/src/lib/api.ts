@@ -873,6 +873,73 @@ export function callDeleteOrganization(data: { organizationId: string }) {
   )(data);
 }
 
+// Borrower support (super-admin troubleshooting)
+export interface AdminBorrowerAttempt {
+  policyId: string;
+  success: boolean;
+  errorReason: string | null;
+  durationMs: number | null;
+  createdAtMs: number;
+  screenshotPaths: string[];
+}
+
+export interface AdminBorrowerPolicy {
+  id: string;
+  carrierName: string | null;
+  policyNumber: string | null;
+  status: string | null;
+  dashboardStatus: string | null;
+  complianceIssues: string[];
+  lastVerifiedAtMs: number | null;
+  lastVerificationError: string | null;
+  verificationSource: string | null;
+  attempts: AdminBorrowerAttempt[];
+}
+
+export interface AdminBorrowerNotification {
+  id: string;
+  type: string;
+  channel: string;
+  trigger: string;
+  status: string;
+  content: string;
+  createdAtMs: number;
+}
+
+export interface AdminBorrowerDetailData {
+  borrower: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    phone: string | null;
+  };
+  policies: AdminBorrowerPolicy[];
+  notifications: AdminBorrowerNotification[];
+}
+
+export function callGetAdminBorrowerDetail(data: {
+  organizationId: string;
+  borrowerId: string;
+}) {
+  return httpsCallable<typeof data, AdminBorrowerDetailData>(
+    getClientFunctions(),
+    "getAdminBorrowerDetail"
+  )(data);
+}
+
+export function callAdminOverridePolicyStatus(data: {
+  policyId: string;
+  organizationId: string;
+  dashboardStatus: "GREEN" | "YELLOW" | "RED";
+  note?: string;
+}) {
+  return httpsCallable<typeof data, { ok: boolean }>(
+    getClientFunctions(),
+    "adminOverridePolicyStatus"
+  )(data);
+}
+
 export interface SimulateVerificationSweepResult {
   runId: string;
   orgId: string;
@@ -956,6 +1023,7 @@ export interface StartManualCarrierSweepResult {
 export function callStartManualCarrierSweep(data: {
   organizationId: string;
   carrierId: string;
+  borrowerId?: string;
 }) {
   return httpsCallable<typeof data, StartManualCarrierSweepResult>(
     getClientFunctions(),

@@ -18,6 +18,7 @@ import {
   type CarrierCredentialMeta,
   type StartPortfolioSweepResult,
 } from "@/lib/api";
+import { AdminBorrowerSupport } from "@/components/admin-borrower-support";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
+  LifeBuoy,
 } from "lucide-react";
 
 type Tab = "overview" | "revenue" | "carriers" | "sweeps";
@@ -467,6 +469,7 @@ export default function AdminDashboard() {
                                     <TableCell colSpan={8} className="p-0">
                                       <OrgDetailPanel
                                         orgName={org.name}
+                                        organizationId={org.id}
                                         detail={orgDetail}
                                         loading={orgDetailLoading}
                                       />
@@ -538,13 +541,17 @@ export default function AdminDashboard() {
 
 function OrgDetailPanel({
   orgName,
+  organizationId,
   detail,
   loading,
 }: {
   orgName: string;
+  organizationId: string;
   detail: AdminOrgDetailData | null;
   loading: boolean;
 }) {
+  const [supportBorrowerId, setSupportBorrowerId] = useState<string | null>(null);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8 bg-muted/30 border-t border-border">
@@ -581,6 +588,7 @@ function OrgDetailPanel({
                   <TableHead>Carrier</TableHead>
                   <TableHead>Expiry</TableHead>
                   <TableHead>Issues</TableHead>
+                  <TableHead className="text-right">Support</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -594,6 +602,11 @@ function OrgDetailPanel({
                       <TableCell>—</TableCell>
                       <TableCell>—</TableCell>
                       <TableCell>—</TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="ghost" onClick={() => setSupportBorrowerId(b.id)}>
+                          <LifeBuoy className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ) : (
                     b.vehicles.map((v, vi) => (
@@ -641,6 +654,13 @@ function OrgDetailPanel({
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
                         </TableCell>
+                        {vi === 0 ? (
+                          <TableCell className="text-right" rowSpan={b.vehicles.length}>
+                            <Button size="sm" variant="ghost" onClick={() => setSupportBorrowerId(b.id)}>
+                              <LifeBuoy className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))
                   )
@@ -699,6 +719,13 @@ function OrgDetailPanel({
           </div>
         )}
       </div>
+
+      <AdminBorrowerSupport
+        organizationId={organizationId}
+        borrowerId={supportBorrowerId}
+        open={supportBorrowerId !== null}
+        onClose={() => setSupportBorrowerId(null)}
+      />
     </div>
   );
 }
