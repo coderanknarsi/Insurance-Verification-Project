@@ -19,6 +19,7 @@ import {
   type StartPortfolioSweepResult,
 } from "@/lib/api";
 import { AdminBorrowerSupport } from "@/components/admin-borrower-support";
+import { AdminBillingPanel } from "@/components/admin-billing-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -470,6 +471,8 @@ export default function AdminDashboard() {
                                       <OrgDetailPanel
                                         orgName={org.name}
                                         organizationId={org.id}
+                                        plan={org.plan}
+                                        subscriptionStatus={org.subscriptionStatus}
                                         detail={orgDetail}
                                         loading={orgDetailLoading}
                                       />
@@ -542,11 +545,15 @@ export default function AdminDashboard() {
 function OrgDetailPanel({
   orgName,
   organizationId,
+  plan,
+  subscriptionStatus,
   detail,
   loading,
 }: {
   orgName: string;
   organizationId: string;
+  plan: string;
+  subscriptionStatus: string;
   detail: AdminOrgDetailData | null;
   loading: boolean;
 }) {
@@ -572,6 +579,12 @@ function OrgDetailPanel({
   return (
     <div className="bg-muted/30 border-t border-border">
       <div className="px-8 py-4 space-y-4">
+        <AdminBillingPanel
+          organizationId={organizationId}
+          plan={plan}
+          subscriptionStatus={subscriptionStatus}
+        />
+
         <h4 className="text-sm font-semibold text-foreground">{orgName} — Borrowers ({detail.borrowers.length})</h4>
 
         {detail.borrowers.length === 0 ? (

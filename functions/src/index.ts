@@ -52,6 +52,14 @@ export { getAdminDashboard } from "./functions/admin-dashboard";
 export { getAdminOrgDetail } from "./functions/admin-org-detail";
 export { getAdminBorrowerDetail } from "./functions/admin-borrower-detail";
 export { adminOverridePolicyStatus } from "./functions/admin-override-policy";
+export {
+  adminExtendTrial,
+  adminApplyDiscount,
+  adminRemoveDiscount,
+  adminChangeOrgPlan,
+  adminCompOrganization,
+  adminUncompOrganization,
+} from "./functions/admin-billing";
 export { deleteOrganization } from "./functions/delete-organization";
 
 // Demo

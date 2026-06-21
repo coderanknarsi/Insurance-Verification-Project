@@ -940,6 +940,56 @@ export function callAdminOverridePolicyStatus(data: {
   )(data);
 }
 
+// Super-admin billing controls
+export function callAdminExtendTrial(data: { organizationId: string; days: number }) {
+  return httpsCallable<typeof data, { ok: boolean; trialEnd: number; status: string }>(
+    getClientFunctions(),
+    "adminExtendTrial"
+  )(data);
+}
+
+export function callAdminApplyDiscount(data: {
+  organizationId: string;
+  percentOff?: number;
+  amountOff?: number;
+}) {
+  return httpsCallable<typeof data, { ok: boolean; discountCode: string; discountPercent: number | null }>(
+    getClientFunctions(),
+    "adminApplyDiscount"
+  )(data);
+}
+
+export function callAdminRemoveDiscount(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { ok: boolean }>(
+    getClientFunctions(),
+    "adminRemoveDiscount"
+  )(data);
+}
+
+export function callAdminChangeOrgPlan(data: {
+  organizationId: string;
+  plan: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE";
+}) {
+  return httpsCallable<typeof data, { ok: boolean; plan: string; status: string }>(
+    getClientFunctions(),
+    "adminChangeOrgPlan"
+  )(data);
+}
+
+export function callAdminCompOrganization(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { ok: boolean; compedAt: number }>(
+    getClientFunctions(),
+    "adminCompOrganization"
+  )(data);
+}
+
+export function callAdminUncompOrganization(data: { organizationId: string }) {
+  return httpsCallable<typeof data, { ok: boolean }>(
+    getClientFunctions(),
+    "adminUncompOrganization"
+  )(data);
+}
+
 export interface SimulateVerificationSweepResult {
   runId: string;
   orgId: string;
