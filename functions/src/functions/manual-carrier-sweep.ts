@@ -83,6 +83,7 @@ function normalizeScrapeForCarrier(
 interface StartManualSweepRequest {
   organizationId: string;
   carrierId: string;
+  borrowerId?: string; // optional: scope the sweep to a single borrower
 }
 
 interface StartManualSweepResponse {
@@ -141,6 +142,7 @@ export const startManualCarrierSweep = onCall(
     }
 
     const orgId = data.organizationId;
+    const scopeBorrowerId = data.borrowerId ?? null;
 
     const credsSnap = await db
       .collection("masterCredentials")
@@ -163,6 +165,7 @@ export const startManualCarrierSweep = onCall(
 
     for (const policyDoc of policiesSnap.docs) {
       const p = policyDoc.data();
+      if (scopeBorrowerId && p.borrowerId !== scopeBorrowerId) continue;
       if (normalizeCarrier(p.insuranceProvider) !== carrierId) continue;
 
       const state = getPolicyVerificationState(p, orgId, activeCarriers);

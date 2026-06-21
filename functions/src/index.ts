@@ -50,6 +50,7 @@ export { stripeWebhook } from "./functions/stripe-webhook";
 // Super Admin
 export { getAdminDashboard } from "./functions/admin-dashboard";
 export { getAdminOrgDetail } from "./functions/admin-org-detail";
+export { getAdminBorrowerDetail } from "./functions/admin-borrower-detail";
 export { deleteOrganization } from "./functions/delete-organization";
 
 // Demo
