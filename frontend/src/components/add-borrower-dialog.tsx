@@ -452,6 +452,17 @@ export function AddBorrowerDialog({
                     </label>
                   </div>
                 )}
+
+                {/* Policy-change disclosure */}
+                <div className="mt-3 p-3 bg-surface rounded-xl border border-border-subtle">
+                  <p className="text-[10px] text-carbon-light leading-relaxed">
+                    <span className="font-medium text-offwhite">Heads up:</span> we
+                    automatically re-check this policy on a recurring basis. If the
+                    carrier, coverage, deductible, or expiration changes — or the policy
+                    lapses — both you and the borrower are notified, and the borrower may
+                    be asked to submit updated proof of insurance.
+                  </p>
+                </div>
               </div>
 
               {/* Vehicle Info */}

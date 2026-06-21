@@ -5,6 +5,7 @@ import { requireAuth, requireOrg, requireRole } from "../middleware/auth";
 import { logAudit } from "../services/audit";
 import { AuditAction, AuditEntityType } from "../types/audit";
 import { OrganizationType } from "../types/organization";
+import { defaultComplianceRules } from "../services/compliance-defaults";
 import { UserRole } from "../types/user";
 
 const DEFAULT_ORG_NAME = "My Organization";
@@ -103,6 +104,15 @@ export const updateOrganizationProfile = onCall(async (request) => {
 
   if (typeof data.onboardingCompleted === "boolean") {
     updatePayload.onboardingCompleted = data.onboardingCompleted;
+  }
+
+  // On first onboarding completion, seed strict-but-reasonable compliance
+  // defaults if the org has never configured its own rules. Existing rules are
+  // never overwritten.
+  const completingOnboarding =
+    data.onboardingCompleted === true && previousOrg.onboardingCompleted !== true;
+  if (completingOnboarding && !previousOrg.settings?.complianceRules) {
+    updatePayload["settings.complianceRules"] = defaultComplianceRules(nextType);
   }
 
   await collections.organizations.doc(data.organizationId).update(updatePayload);
