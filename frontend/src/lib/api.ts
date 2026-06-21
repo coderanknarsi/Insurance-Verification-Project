@@ -928,6 +928,25 @@ export function callGetAdminBorrowerDetail(data: {
   )(data);
 }
 
+export interface PolicyChangeRow {
+  id: string;
+  type: string;
+  severity: "info" | "warning" | "critical";
+  summary: string;
+  createdAt: number;
+  notified: boolean;
+}
+
+export function callGetPolicyChanges(data: {
+  organizationId: string;
+  policyId: string;
+}) {
+  return httpsCallable<typeof data, { changes: PolicyChangeRow[] }>(
+    getClientFunctions(),
+    "getPolicyChanges"
+  )(data);
+}
+
 export function callAdminOverridePolicyStatus(data: {
   policyId: string;
   organizationId: string;

@@ -112,3 +112,80 @@ export async function dispatchLenderChangeAlert(
     });
   }
 }
+
+export interface LenderChangeDigestRow {
+  borrowerName: string;
+  summary: string;
+  severity: ChangeSeverity;
+  detectedAt: string;
+}
+
+/**
+ * Weekly roll-up of policy changes for an org's lender/admin. Sent to the org's
+ * admin recipient. Best-effort: never throws. Returns true if an email was sent.
+ */
+export async function sendLenderChangeDigestEmail(
+  organizationId: string,
+  rows: LenderChangeDigestRow[],
+): Promise<boolean> {
+  try {
+    if (rows.length === 0) return false;
+    const email = await getLenderAlertEmail(organizationId);
+    if (!email) {
+      logger.warn("[lender-change-digest] no recipient email", { organizationId });
+      return false;
+    }
+
+    const accentFor = (s: ChangeSeverity) =>
+      s === "critical" ? "#ef4444" : s === "warning" ? "#f59e0b" : "#3b82f6";
+
+    const rowsHtml = rows
+      .map(
+        (r) => `
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px;color:#ffffff;">${r.borrowerName}</td>
+          <td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px;color:#c7d2e8;">${r.summary}</td>
+          <td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;color:${accentFor(r.severity)};text-transform:uppercase;font-weight:600;">${r.severity}</td>
+          <td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;color:#6b7a99;">${r.detectedAt}</td>
+        </tr>`,
+      )
+      .join("");
+
+    const criticalCount = rows.filter((r) => r.severity === "critical").length;
+    const headline =
+      criticalCount > 0
+        ? `${criticalCount} coverage issue${criticalCount === 1 ? "" : "s"} need attention`
+        : `${rows.length} coverage update${rows.length === 1 ? "" : "s"} this week`;
+
+    const html = wrapInLayout(`
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#ffffff;">Weekly coverage change digest</h2>
+      <p style="margin:0 0 20px;font-size:14px;color:#8b9dc3;line-height:1.6;">${headline} across your financed portfolio.</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;color:#6b7a99;text-transform:uppercase;letter-spacing:0.5px;">Borrower</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;color:#6b7a99;text-transform:uppercase;letter-spacing:0.5px;">Change</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;color:#6b7a99;text-transform:uppercase;letter-spacing:0.5px;">Severity</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;color:#6b7a99;text-transform:uppercase;letter-spacing:0.5px;">Detected</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <p style="margin:0;font-size:13px;color:#6b7a99;line-height:1.5;">
+        Review these borrowers in your dashboard: ${DASHBOARD_URL}
+      </p>`);
+
+    const result = await sendGenericEmail(email, `Weekly coverage digest — ${headline}`, html);
+    if (!result.success) {
+      logger.warn("[lender-change-digest] send failed", { organizationId, error: result.error });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.warn("[lender-change-digest] unexpected error", {
+      organizationId,
+      error: String(err),
+    });
+    return false;
+  }
+}

@@ -21,6 +21,8 @@ import {
   type ProgressiveScrapedPolicy,
 } from "../services/progressive-normalize";
 import { classifySweepOutcome } from "../services/carrier-switch";
+import { extractSnapshot } from "../services/policy-snapshot";
+import { diffPolicySnapshot } from "../services/policy-diff";
 import type { ComplianceRules } from "../types/organization";
 import type { VerificationInput } from "./data-feed-types";
 import { dispatchStatusWebhook } from "../services/outbound-webhook";
@@ -292,6 +294,8 @@ export const recordManualSweepResult = onCall(
     let webhookDashboardStatus: string | null = null;
     let webhookComplianceIssues: string[] = [];
     let webhookLienholderListed: boolean | null = null;
+    let webhookChangeTypes: string[] = [];
+    let webhookChangeSummary: string | null = null;
 
     if (success) {
       // Dispatch to the carrier-specific normalizer by THIS policy's carrier
@@ -390,6 +394,27 @@ export const recordManualSweepResult = onCall(
       webhookComplianceIssues = finalComplianceIssues;
       webhookLienholderListed = parsed.isLienholderListed;
 
+      // Summarize what changed for the partner webhook. Compares the prior
+      // snapshot to an approximation of the post-sweep policy. Best-effort only.
+      try {
+        const beforeSnap = policy.lastSnapshot ?? extractSnapshot(policy as never);
+        const afterSnap = extractSnapshot({
+          ...policy,
+          status: outcome === "POSSIBLE_SWITCH" ? policy.status : parsed.status,
+          policyNumber: parsed.policyNumber ?? policy.policyNumber,
+          coverages: parsed.coverages.length > 0 ? parsed.coverages : policy.coverages,
+          coveragePeriod: mergedPeriod ?? policy.coveragePeriod,
+          isLienholderListed: parsed.isLienholderListed,
+          dashboardStatus: finalDashboardStatus,
+        } as never);
+        const changes = diffPolicySnapshot(beforeSnap, afterSnap);
+        webhookChangeTypes = changes.map((c) => c.type);
+        webhookChangeSummary =
+          changes.length > 0 ? changes.map((c) => c.summary).join("; ") : null;
+      } catch {
+        // Non-fatal: webhook still fires without change metadata.
+      }
+
       batch.update(policyRef, policyUpdate);
       batch.update(runRef, { successCount: FieldValue.increment(1) });
     } else {
@@ -447,6 +472,8 @@ export const recordManualSweepResult = onCall(
         lastVerifiedAt: success ? new Date().toISOString() : null,
         lastVerificationError: success ? null : (data.error ?? "Unknown error"),
         verifiedVia: "manual-operator",
+        changeTypes: webhookChangeTypes,
+        changeSummary: webhookChangeSummary,
       });
     })();
 

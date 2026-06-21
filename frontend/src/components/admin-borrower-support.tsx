@@ -5,8 +5,10 @@ import {
   callGetAdminBorrowerDetail,
   callAdminOverridePolicyStatus,
   callStartManualCarrierSweep,
+  callGetPolicyChanges,
   type AdminBorrowerDetailData,
   type AdminBorrowerPolicy,
+  type PolicyChangeRow,
 } from "@/lib/api";
 import {
   Dialog,
@@ -67,6 +69,7 @@ export function AdminBorrowerSupport({
   const [error, setError] = useState<string | null>(null);
   const [busyPolicy, setBusyPolicy] = useState<string | null>(null);
   const [overrideNote, setOverrideNote] = useState<Record<string, string>>({});
+  const [changes, setChanges] = useState<Record<string, PolicyChangeRow[]>>({});
 
   const load = useCallback(async () => {
     if (!borrowerId) return;
@@ -75,6 +78,18 @@ export function AdminBorrowerSupport({
     try {
       const res = await callGetAdminBorrowerDetail({ organizationId, borrowerId });
       setDetail(res.data);
+      // Best-effort: load the change timeline for each policy.
+      const entries = await Promise.all(
+        res.data.policies.map(async (p) => {
+          try {
+            const c = await callGetPolicyChanges({ organizationId, policyId: p.id });
+            return [p.id, c.data.changes] as const;
+          } catch {
+            return [p.id, [] as PolicyChangeRow[]] as const;
+          }
+        }),
+      );
+      setChanges(Object.fromEntries(entries));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load borrower detail.");
     } finally {
@@ -84,7 +99,10 @@ export function AdminBorrowerSupport({
 
   useEffect(() => {
     if (open && borrowerId) void load();
-    if (!open) setDetail(null);
+    if (!open) {
+      setDetail(null);
+      setChanges({});
+    }
   }, [open, borrowerId, load]);
 
   const reVerify = async (policy: AdminBorrowerPolicy) => {
@@ -250,6 +268,37 @@ export function AdminBorrowerSupport({
                       </div>
                     )}
                   </div>
+
+                  {/* Change timeline */}
+                  {(changes[p.id]?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-foreground mb-1">
+                        Policy changes ({changes[p.id].length})
+                      </p>
+                      <div className="space-y-1">
+                        {changes[p.id].map((c) => (
+                          <div key={c.id} className="flex items-start gap-2 text-xs">
+                            <span
+                              className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
+                                c.severity === "critical"
+                                  ? "bg-red-500"
+                                  : c.severity === "warning"
+                                    ? "bg-yellow-500"
+                                    : "bg-blue-500"
+                              }`}
+                            />
+                            <span className="text-muted-foreground shrink-0">
+                              {fmt(c.createdAt)}
+                            </span>
+                            <span className="text-foreground">{c.summary}</span>
+                            {c.notified && (
+                              <span className="text-muted-foreground shrink-0">· notified</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Manual override */}
                   <div className="flex items-center gap-2 pt-1">

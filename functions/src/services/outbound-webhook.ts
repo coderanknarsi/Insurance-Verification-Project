@@ -32,6 +32,8 @@ export interface PolicyStatusWebhookPayload {
   lastVerifiedAt: string | null;
   lastVerificationError: string | null;
   verifiedVia: string;
+  changeTypes?: string[];
+  changeSummary?: string | null;
   sentAt: string;
 }
 

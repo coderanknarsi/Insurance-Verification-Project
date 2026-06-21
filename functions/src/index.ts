@@ -34,6 +34,7 @@ export { dailyLapseAutoRequest } from "./functions/daily-lapse-auto-request";
 export { dailyComplianceEscalation } from "./functions/daily-compliance-escalation";
 export { dailyIntakeReminder } from "./functions/daily-intake-reminder";
 export { onPolicyVerificationChange } from "./functions/on-policy-verification-change";
+export { weeklyLenderChangeDigest } from "./functions/weekly-lender-change-digest";
 
 // Phase 6: Stripe Billing
 export {
@@ -52,6 +53,7 @@ export { stripeWebhook } from "./functions/stripe-webhook";
 export { getAdminDashboard } from "./functions/admin-dashboard";
 export { getAdminOrgDetail } from "./functions/admin-org-detail";
 export { getAdminBorrowerDetail } from "./functions/admin-borrower-detail";
+export { getPolicyChanges } from "./functions/admin-policy-changes";
 export { adminOverridePolicyStatus } from "./functions/admin-override-policy";
 export {
   adminExtendTrial,
