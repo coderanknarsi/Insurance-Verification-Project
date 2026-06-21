@@ -87,6 +87,28 @@ export interface StripeSubscriptionData {
   currentPeriodEnd?: number; // Unix timestamp
   trialEnd?: number; // Unix timestamp
   cancelAtPeriodEnd?: boolean;
+  // Admin adjustments (mirrored from Stripe):
+  discountPercent?: number; // 0-100, recurring % off
+  discountCode?: string; // Stripe coupon/promo id applied
+  priceOverrideMonthly?: number; // custom negotiated monthly price (USD)
+  compedAt?: number; // unix ms; non-null => free account
+}
+
+/**
+ * Resolve the real monthly revenue for an org after admin adjustments.
+ * Precedence: comped (0) > priceOverride > plan price minus percent discount.
+ */
+export function effectiveMonthly(
+  plan: SubscriptionPlan | string,
+  stripe: Partial<StripeSubscriptionData>,
+): number {
+  if (stripe.compedAt) return 0;
+  if (typeof stripe.priceOverrideMonthly === "number") {
+    return stripe.priceOverrideMonthly;
+  }
+  const base = PLAN_CONFIG[plan as SubscriptionPlan]?.priceMonthly ?? 0;
+  const pct = stripe.discountPercent ?? 0;
+  return base * (1 - pct / 100);
 }
 
 export function getPlanByPriceId(priceId: string): SubscriptionPlan | null {

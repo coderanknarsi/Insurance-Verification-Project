@@ -1,7 +1,7 @@
 import { onCall } from "firebase-functions/v2/https";
 import { collections } from "../config/firestore";
 import { requireSuperAdmin } from "../middleware/auth";
-import { PLAN_CONFIG, SubscriptionPlan, type StripeSubscriptionData } from "../types/subscription";
+import { PLAN_CONFIG, SubscriptionPlan, effectiveMonthly, type StripeSubscriptionData } from "../types/subscription";
 import { NotificationStatus } from "../types/notification";
 
 interface AdminOrgSummary {
@@ -102,7 +102,7 @@ export const getAdminDashboard = onCall(
       if (status === "active" || status === "trialing") {
         const planKey = plan as keyof typeof PLAN_CONFIG;
         if (PLAN_CONFIG[planKey]) {
-          mrr += PLAN_CONFIG[planKey].priceMonthly;
+          mrr += effectiveMonthly(planKey, stripe ?? {});
         }
         // Track plan counts (only for paying/trialing orgs)
         planCounts[plan] = (planCounts[plan] ?? 0) + 1;
