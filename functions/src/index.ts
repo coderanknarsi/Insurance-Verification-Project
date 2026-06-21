@@ -33,6 +33,7 @@ export { dailyExpiryReminder } from "./functions/daily-expiry-reminder";
 export { dailyLapseAutoRequest } from "./functions/daily-lapse-auto-request";
 export { dailyComplianceEscalation } from "./functions/daily-compliance-escalation";
 export { dailyIntakeReminder } from "./functions/daily-intake-reminder";
+export { onPolicyVerificationChange } from "./functions/on-policy-verification-change";
 
 // Phase 6: Stripe Billing
 export {

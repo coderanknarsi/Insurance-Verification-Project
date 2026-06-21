@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
+import type { PolicySnapshot } from "./policy-change";
 
 export enum PolicyStatus {
   ACTIVE = "ACTIVE",
@@ -143,6 +144,21 @@ export interface Policy {
    * resolve. Used by daily-compliance-escalation for T+1 / T+14 / T+30 notices.
    */
   coverageIssueDetectedAt?: Timestamp;
+  /**
+   * Snapshot of the last *verified* coverage state, written by the
+   * on-policy-verification-change trigger after it diffs an update. Used as
+   * the "before" baseline for the next verification's diff.
+   */
+  lastSnapshot?: PolicySnapshot;
+  /**
+   * Set when a sweep finds NO policy record at the carrier on file (as opposed
+   * to an explicit CANCELLED). Indicates the borrower may have switched
+   * insurers; drives the "confirm coverage" intake instead of a false lapse.
+   */
+  possibleCarrierSwitch?: boolean;
+  carrierSwitchDetectedAt?: Timestamp;
+  /** Borrower acknowledged at intake they must report policy changes. */
+  policyChangeNoticeAck?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

@@ -27,4 +27,7 @@ export const collections = {
   auditLog: db.collection("auditLog").withConverter(converter<AuditLogEntry>()),
   notifications: db.collection("notifications").withConverter(converter<Notification>()),
   invites: db.collection("invites").withConverter(converter<Invite>()),
+  // Raw (no converter): lifecycle change history written by the
+  // on-policy-verification-change trigger.
+  policyChanges: db.collection("policyChanges"),
 };
