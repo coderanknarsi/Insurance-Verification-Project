@@ -100,6 +100,9 @@ export const dailyComplianceEscalation = onSchedule(
 
       for (const policyDoc of policiesSnap.docs) {
         const policy = policyDoc.data();
+        // Suspected carrier switch is handled by the carrier-switch confirm
+        // flow, not the lapse/coverage escalation cadence.
+        if (policy.possibleCarrierSwitch) continue;
         const isLapsed = LAPSED_STATUSES.has(policy.status);
         const issueList = (policy.complianceIssues ?? []).filter((i: string) =>
           COVERAGE_ISSUES.has(i),

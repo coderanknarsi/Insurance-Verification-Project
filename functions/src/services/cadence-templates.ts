@@ -298,3 +298,117 @@ export function cadenceSmsText(
 ): string {
   return STAGE_COPY[stage].sms(input);
 }
+
+// ─── Mid-term coverage change messages (delta engine) ───────────
+
+export type ChangeMessageKind =
+  | "VERIFICATION_PROOF_REQUEST"
+  | "REINSTATEMENT_REMINDER"
+  | "COVERAGE_DOWNGRADED"
+  | "DEDUCTIBLE_INCREASED"
+  | "EXPIRATION_MOVED_UP";
+
+/**
+ * Build the borrower-facing email + SMS for a detected mid-term policy change.
+ * Keeps the same legal framing ("loan requires coverage / lender may
+ * force-place") as the cadence final notices.
+ */
+export function changeMessage(
+  kind: ChangeMessageKind,
+  args: {
+    dealershipName: string;
+    firstName?: string;
+    summary: string;
+    intakeUrl?: string;
+  },
+): { subject: string; html: string; sms: string } {
+  const hi = args.firstName ? `Hi ${args.firstName}, ` : "";
+  const action = args.intakeUrl
+    ? `Please confirm your current coverage here: ${args.intakeUrl}`
+    : "Please contact us with your current insurance details.";
+  const para = (text: string) =>
+    `<p style="margin:0 0 16px;font-size:15px;color:#e5edff;line-height:1.6;">${text}</p>`;
+  const sub = (text: string) =>
+    `<p style="margin:0;font-size:14px;color:#9fb0d0;line-height:1.6;">${text}</p>`;
+
+  switch (kind) {
+    case "VERIFICATION_PROOF_REQUEST":
+      return {
+        subject: `Action needed: confirm your insurance — ${args.dealershipName}`,
+        html: layoutHtml(
+          para(
+            `${hi}we noticed a change to the insurance on your financed vehicle (${args.summary}). To keep your loan in good standing, we need to confirm your active coverage.`,
+          ) + sub(action),
+        ),
+        sms: `${args.dealershipName}: we noticed an insurance change (${args.summary}). ${args.intakeUrl ? `Confirm coverage: ${args.intakeUrl}` : "Please reply or call us."}\n\nReply STOP to opt out.`,
+      };
+    case "REINSTATEMENT_REMINDER":
+      return {
+        subject: `Coverage confirmed — thank you (${args.dealershipName})`,
+        html: layoutHtml(
+          para(
+            `${hi}we've confirmed your insurance is active again. No further action is needed. Thank you for keeping your coverage current.`,
+          ),
+        ),
+        sms: `${args.dealershipName}: your insurance is confirmed active again — thank you.\n\nReply STOP to opt out.`,
+      };
+    case "COVERAGE_DOWNGRADED":
+      return {
+        subject: `Important: your coverage was reduced — ${args.dealershipName}`,
+        html: layoutHtml(
+          para(
+            `${hi}your loan agreement requires comprehensive and collision coverage on your vehicle. We detected: ${args.summary}.`,
+          ) +
+            sub(
+              `${action} If coverage isn't restored, the lender may add force-placed insurance (typically $1,500–$3,000/yr).`,
+            ),
+        ),
+        sms: `${args.dealershipName}: your auto coverage was reduced (${args.summary}). Your loan requires full coverage. ${args.intakeUrl ?? "Please contact us."}\n\nReply STOP to opt out.`,
+      };
+    case "DEDUCTIBLE_INCREASED":
+      return {
+        subject: `Notice: your deductible increased — ${args.dealershipName}`,
+        html: layoutHtml(
+          para(
+            `${hi}we detected ${args.summary}. Your loan agreement may cap the maximum deductible allowed.`,
+          ) + sub(action),
+        ),
+        sms: `${args.dealershipName}: ${args.summary}. Please confirm this meets your loan terms. ${args.intakeUrl ?? ""}\n\nReply STOP to opt out.`,
+      };
+    case "EXPIRATION_MOVED_UP":
+      return {
+        subject: `Your policy now expires sooner — ${args.dealershipName}`,
+        html: layoutHtml(
+          para(
+            `${hi}we detected ${args.summary}. Please make sure your coverage stays continuous.`,
+          ) + sub(action),
+        ),
+        sms: `${args.dealershipName}: ${args.summary}. Keep coverage continuous. ${args.intakeUrl ?? ""}\n\nReply STOP to opt out.`,
+      };
+  }
+}
+
+/**
+ * Generic Resend send used by change notifications and lender change alerts so
+ * everything shares the single Resend client configured in this module.
+ */
+export async function sendGenericEmail(
+  to: string,
+  subject: string,
+  html: string,
+): Promise<EmailResult> {
+  const resend = getResend();
+  const { data, error } = await resend.emails.send({
+    from: fromEmail.value(),
+    to,
+    subject,
+    html,
+  });
+  if (error) return { id: "", success: false, error: error.message };
+  return { id: data?.id ?? "", success: true };
+}
+
+/** Wrap arbitrary body HTML in the shared branded layout. */
+export function wrapInLayout(bodyHtml: string): string {
+  return layoutHtml(bodyHtml);
+}

@@ -60,6 +60,13 @@ export const dailyLapseAutoRequest = onSchedule(
       for (const policyDoc of policiesSnap.docs) {
         const policy = policyDoc.data();
 
+        // Suspected carrier switch — handled by the carrier-switch confirm flow,
+        // not the lapse/repo cadence.
+        if (policy.possibleCarrierSwitch) {
+          totalSkipped++;
+          continue;
+        }
+
         // Skip if already awaiting credentials (we already sent a request)
         if (policy.awaitingCredentials) {
           totalSkipped++;

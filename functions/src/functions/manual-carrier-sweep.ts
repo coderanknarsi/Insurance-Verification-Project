@@ -20,6 +20,7 @@ import {
   normalizeProgressiveScrape,
   type ProgressiveScrapedPolicy,
 } from "../services/progressive-normalize";
+import { classifySweepOutcome } from "../services/carrier-switch";
 import type { ComplianceRules } from "../types/organization";
 import type { VerificationInput } from "./data-feed-types";
 import { dispatchStatusWebhook } from "../services/outbound-webhook";
@@ -358,6 +359,32 @@ export const recordManualSweepResult = onCall(
       if (parsed.coverages.length > 0) policyUpdate.coverages = parsed.coverages;
       if (parsed.interestedParties.length > 0)
         policyUpdate.interestedParties = parsed.interestedParties;
+
+      // Carrier-switch vs lapse: if the carrier on file returns NO record but
+      // the borrower previously had active coverage here, treat it as a likely
+      // insurer switch (soft YELLOW + flag) instead of a hard lapse that would
+      // trigger the repo-track lapse cadence. The change trigger then routes a
+      // "confirm coverage" proof request to the borrower.
+      const hadPriorCoverage =
+        policy.lastSnapshot?.status === PolicyStatus.ACTIVE ||
+        policy.status === PolicyStatus.ACTIVE;
+      const outcome = classifySweepOutcome({
+        parsedStatus: parsed.status,
+        recordFound: parsed.status !== PolicyStatus.NOT_AVAILABLE,
+        hadPriorCoverage,
+      });
+      if (outcome === "POSSIBLE_SWITCH") {
+        policyUpdate.possibleCarrierSwitch = true;
+        policyUpdate.carrierSwitchDetectedAt = FieldValue.serverTimestamp();
+        // Keep status soft — do not force CANCELLED.
+        delete policyUpdate.status;
+        delete policyUpdate.policyStatus;
+        finalDashboardStatus = DashboardStatus.YELLOW;
+        policyUpdate.dashboardStatus = finalDashboardStatus;
+      } else {
+        policyUpdate.possibleCarrierSwitch = FieldValue.delete();
+        policyUpdate.carrierSwitchDetectedAt = FieldValue.delete();
+      }
 
       webhookDashboardStatus = finalDashboardStatus;
       webhookComplianceIssues = finalComplianceIssues;
