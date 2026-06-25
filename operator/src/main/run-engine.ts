@@ -77,8 +77,14 @@ async function captureScreenshot(
         client.send("Page.captureScreenshot", {
           format: "png",
           captureBeyondViewport: false,
+          // The verification page is a dedicated, usually-occluded background
+          // tab. With the default `fromSurface: true`, headful Chrome waits for
+          // a compositor frame that an occluded tab never produces, so the
+          // capture hung the full timeout before falling back. `false` reads
+          // straight from the renderer and returns immediately for hidden tabs.
+          fromSurface: false,
         }),
-        10_000,
+        6_000,
         `Screenshot ${label} CDP capture`,
       )) as { data: string };
       return data; // already base64, no data URL prefix

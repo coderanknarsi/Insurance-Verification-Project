@@ -37,10 +37,6 @@ type StateFarmScraped = {
   policyStatus?: string;
   policyOriginDate?: string;
   policyEffectiveDate?: string;
-  hasCollision?: boolean;
-  collisionDeductible?: string;
-  hasComprehensive?: boolean;
-  comprehensiveDeductible?: string;
   bodilyInjuryLimitPerAccident?: string;
   propertyDamageLimitPerAccident?: string;
   lienholderName?: string;
@@ -365,22 +361,6 @@ async function scrapePolicyInfo(page: Page): Promise<StateFarmScraped> {
     function bodyText(): string {
       return document.body?.innerText ?? "";
     }
-    function scrapeCoverageBlock(letter: string, name: string) {
-      const text = bodyText();
-      const lines = text.split(/\n+/).map((l) => l.trim());
-      const idx = lines.findIndex(
-        (l) =>
-          new RegExp(`^${letter}\\b.*${name}`, "i").test(l) ||
-          new RegExp(`\\b${name}\\b`, "i").test(l),
-      );
-      if (idx === -1) return { present: false, deductible: undefined };
-      const win = lines.slice(idx, idx + 5).join(" ");
-      const m =
-        win.match(/(?:Deductible|Ded)[^\d$]*\$?\s*([0-9][\d,]*)/i) ??
-        win.match(/\$\s*([0-9][\d,]*)/);
-      const deductible = m ? m[1].replace(/,/g, "") : undefined;
-      return { present: true, deductible };
-    }
 
     const result: Record<string, unknown> = {
       policyNumber: getTextAfterLabel(/^Policy\s+Number\b/i),
@@ -393,13 +373,10 @@ async function scrapePolicyInfo(page: Page): Promise<StateFarmScraped> {
       lienholderAddress: getTextAfterLabel(/^Lien\s*holder\s+Address\b/i),
       lossPaye: getTextAfterLabel(/^Loss\s*Pay(ee|e)\b/i),
     };
-    const collision = scrapeCoverageBlock("A", "Collision");
-    result.hasCollision = collision.present;
-    if (collision.deductible) result.collisionDeductible = collision.deductible;
-    const comprehensive = scrapeCoverageBlock("D", "Comprehensive");
-    result.hasComprehensive = comprehensive.present;
-    if (comprehensive.deductible)
-      result.comprehensiveDeductible = comprehensive.deductible;
+    // NOTE: State Farm's B2B "Insurance Inquiry" Policy Information page only
+    // lists liability (Coverage A: Bodily Injury / Property Damage). It does
+    // NOT report comprehensive or collision, so we don't attempt to scrape
+    // them — the backend normalizer treats their absence as "unknown".
     const txt = bodyText();
     const biMatch = txt.match(
       /Bodily\s+Injury[^$\n]*\$?\s*([0-9][\d,]*)\s*\/\s*\$?\s*([0-9][\d,]*)/i,
