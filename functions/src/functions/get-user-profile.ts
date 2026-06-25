@@ -6,8 +6,19 @@ import { InviteStatus } from "../types/invite";
 import { OrganizationType, NotificationPreference, SubscriptionTier } from "../types/organization";
 import { SubscriptionPlan } from "../types/subscription";
 import { logger } from "firebase-functions/v2";
-import { sendAdminAlertEmail } from "../services/email";
+import { sendAdminAlertEmail, ADMIN_EMAIL } from "../services/email";
 import { getBootstrapOrganizationName } from "./organization-profile";
+
+/**
+ * Internal AutoLienTracker accounts (staff/dev/testing). Re-bootstrapping one
+ * of these — e.g. after a Firestore user doc was deleted while the Firebase
+ * Auth account lived on — should NOT page the admin as a "new signup".
+ */
+function isInternalEmail(email: string): boolean {
+  const e = email.trim().toLowerCase();
+  if (!e) return false;
+  return e === ADMIN_EMAIL.toLowerCase() || e.endsWith("@autolientracker.com");
+}
 
 /**
  * Returns the authenticated user's profile (org ID, role, etc.)
@@ -121,6 +132,39 @@ export const getUserProfile = onCall(async (request) => {
     const email = request.auth.token.email ?? "";
     const displayName = request.auth.token.name ?? email.split("@")[0] ?? "User";
 
+    // Guard against duplicate orgs + false "new signup" alerts. If a user doc
+    // for this email already exists under a DIFFERENT uid (e.g. a second
+    // sign-in method, or a re-created Auth account), re-link this uid to that
+    // existing organization instead of spawning a brand-new org.
+    if (email) {
+      const existingByEmail = await collections.users
+        .where("email", "==", email)
+        .limit(1)
+        .get();
+      const reuse = existingByEmail.docs.find((d) => d.id !== uid);
+      if (reuse) {
+        const existing = reuse.data();
+        await collections.users.doc(uid).set({
+          organizationId: existing.organizationId,
+          email,
+          displayName,
+          role: existing.role ?? UserRole.ADMIN,
+          firebaseAuthUid: uid,
+          createdAt: now,
+          updatedAt: now,
+        });
+        logger.info(
+          `Re-linked uid ${uid} to existing org ${existing.organizationId} for ${email} (no new org, no alert)`,
+        );
+        return {
+          organizationId: existing.organizationId,
+          email,
+          displayName,
+          role: existing.role ?? UserRole.ADMIN,
+        };
+      }
+    }
+
     const orgRef = collections.organizations.doc();
     const orgName = getBootstrapOrganizationName(requestData?.organizationName, displayName);
 
@@ -170,14 +214,20 @@ export const getUserProfile = onCall(async (request) => {
 
     logger.info(`New user bootstrapped: ${uid}, org: ${orgRef.id}`);
 
-    sendAdminAlertEmail(
-      `New Signup — ${orgName}`,
-      "\ud83c\udf89 New Organization Signed Up",
-      `<p style="margin:0 0 8px;font-size:14px;color:#e2e8f0;"><strong>Organization:</strong> ${orgName}</p>
+    // Only page the admin for genuine external signups — internal staff/dev
+    // accounts re-bootstrapping after a delete are not real new customers.
+    if (!isInternalEmail(email)) {
+      sendAdminAlertEmail(
+        `New Signup — ${orgName}`,
+        "\ud83c\udf89 New Organization Signed Up",
+        `<p style="margin:0 0 8px;font-size:14px;color:#e2e8f0;"><strong>Organization:</strong> ${orgName}</p>
        <p style="margin:0 0 8px;font-size:14px;color:#e2e8f0;"><strong>User:</strong> ${displayName}</p>
        <p style="margin:0 0 8px;font-size:14px;color:#e2e8f0;"><strong>Email:</strong> ${email}</p>
        <p style="margin:0;font-size:14px;color:#e2e8f0;"><strong>Plan:</strong> Starter (14-day trial)</p>`
-    ).catch((err) => logger.error("Admin alert email failed:", err));
+      ).catch((err) => logger.error("Admin alert email failed:", err));
+    } else {
+      logger.info(`Suppressed new-signup admin alert for internal email ${email}`);
+    }
 
     return {
       organizationId: orgRef.id,
