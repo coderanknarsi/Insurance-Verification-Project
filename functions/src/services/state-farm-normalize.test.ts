@@ -48,7 +48,7 @@ describe("normalizeStateFarmScrape", () => {
     assert.equal(r.dashboardStatus, DashboardStatus.RED);
   });
 
-  it("flags NO_COLLISION / NO_COMPREHENSIVE when coverages absent", () => {
+  it("does NOT flag NO_COLLISION / NO_COMPREHENSIVE — State Farm's portal does not report them", () => {
     const r = normalizeStateFarmScrape({
       policyStatus: "Active",
       policyOriginDate: "2025-01-01",
@@ -58,9 +58,10 @@ describe("normalizeStateFarmScrape", () => {
       lienholderName: "Big Bank",
       lossPaye: "Yes",
     });
-    assert.ok(r.complianceIssues.includes(ComplianceIssue.NO_COLLISION));
-    assert.ok(r.complianceIssues.includes(ComplianceIssue.NO_COMPREHENSIVE));
-    assert.equal(r.dashboardStatus, DashboardStatus.RED);
+    assert.ok(!r.complianceIssues.includes(ComplianceIssue.NO_COLLISION));
+    assert.ok(!r.complianceIssues.includes(ComplianceIssue.NO_COMPREHENSIVE));
+    // Active + lienholder listed, no other issues -> not RED for unverifiable coverage.
+    assert.equal(r.dashboardStatus, DashboardStatus.GREEN);
   });
 
   it("maps CANCELLED string to POLICY_CANCELLED + RED", () => {

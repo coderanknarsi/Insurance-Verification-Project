@@ -192,7 +192,17 @@ export function normalizeStateFarmScrape(
     vehicleRemovedFromPolicy: false,
   };
 
-  const complianceIssues = computeComplianceIssues(parsed, rules);
+  const rawComplianceIssues = computeComplianceIssues(parsed, rules);
+  // State Farm's B2B "Insurance Inquiry" Policy Information page only lists
+  // liability (Coverage A: Bodily Injury / Property Damage). It structurally
+  // does NOT report comprehensive or collision, so their absence here is
+  // "unknown", not "missing" — flagging it would turn every State Farm policy
+  // RED. Drop those two issues rather than asserting a coverage gap we can't see.
+  const complianceIssues = rawComplianceIssues.filter(
+    (issue) =>
+      issue !== ComplianceIssue.NO_COMPREHENSIVE &&
+      issue !== ComplianceIssue.NO_COLLISION,
+  );
   const dashboardStatus = computeDashboardStatus(
     status,
     isLienholderListed,
