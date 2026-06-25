@@ -20,6 +20,10 @@ import {
   normalizeProgressiveScrape,
   type ProgressiveScrapedPolicy,
 } from "../services/progressive-normalize";
+import {
+  normalizeAllstateScrape,
+  type AllstateScrapedPolicy,
+} from "../services/allstate-normalize";
 import { classifySweepOutcome } from "../services/carrier-switch";
 import { extractSnapshot } from "../services/policy-snapshot";
 import { diffPolicySnapshot } from "../services/policy-diff";
@@ -43,6 +47,7 @@ const CARRIER_ID_MAP: Record<string, string> = {
   "state-farm": "state_farm",
   "state_farm": "state_farm",
   "progressive": "progressive",
+  "allstate": "allstate",
 };
 
 function canonicalCarrierId(carrierId: string | undefined): string {
@@ -67,7 +72,7 @@ function canonicalCarrierId(carrierId: string | undefined): string {
  */
 function normalizeScrapeForCarrier(
   carrierId: string,
-  scraped: StateFarmScrapedPolicy | ProgressiveScrapedPolicy,
+  scraped: StateFarmScrapedPolicy | ProgressiveScrapedPolicy | AllstateScrapedPolicy,
   rules: ComplianceRules | undefined,
 ) {
   switch (canonicalCarrierId(carrierId)) {
@@ -75,6 +80,8 @@ function normalizeScrapeForCarrier(
       return normalizeProgressiveScrape(scraped as ProgressiveScrapedPolicy, rules);
     case "state_farm":
       return normalizeStateFarmScrape(scraped as StateFarmScrapedPolicy, rules);
+    case "allstate":
+      return normalizeAllstateScrape(scraped as AllstateScrapedPolicy, rules);
     default:
       throw new HttpsError(
         "invalid-argument",
@@ -99,7 +106,7 @@ interface RecordManualResultRequest {
   runId: string;
   policyId: string;
   // Per-carrier scrape shape; dispatched to the matching normalizer by carrierId.
-  scraped?: StateFarmScrapedPolicy | ProgressiveScrapedPolicy;
+  scraped?: StateFarmScrapedPolicy | ProgressiveScrapedPolicy | AllstateScrapedPolicy;
   error?: string;
   durationMs?: number;
   screenshotPaths?: string[];

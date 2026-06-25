@@ -24,7 +24,11 @@ export type SupportedCarrier = (typeof SUPPORTED_CARRIERS)[number];
  * manual-verification worklist instead of an operator sweep. Must match the
  * non-stub adapters in `operator/src/carriers/registry.ts`.
  */
-export const ADAPTER_READY_CARRIERS = ["state_farm", "progressive"] as const;
+export const ADAPTER_READY_CARRIERS = [
+  "state_farm",
+  "progressive",
+  "allstate",
+] as const;
 
 /** True when the operator can auto-verify this carrier via a real adapter. */
 export function hasOperatorAdapter(name: string | undefined | null): boolean {
