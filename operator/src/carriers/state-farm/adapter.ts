@@ -250,10 +250,25 @@ async function pickAutoSelection(
       }
       const radio = target.radio;
       if (!radio) return { ok: false, error: "Row has no radio button" };
+      // Select the row robustly. Some State Farm builds only enable/prime the
+      // Continue button off the radio's change handler and ignore a bare
+      // programmatic click, which leaves the page stuck on Auto Selection — so
+      // click the radio AND its label, force `checked`, and fire the
+      // input/change events the page listens for.
+      if (radio.id) {
+        const lbl = document.querySelector(
+          `label[for="${CSS.escape(radio.id)}"]`,
+        ) as HTMLElement | null;
+        lbl?.click();
+      }
       radio.click();
+      radio.checked = true;
+      radio.dispatchEvent(new Event("input", { bubbles: true }));
+      radio.dispatchEvent(new Event("change", { bubbles: true }));
+
       const continueBtn = Array.from(
         document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
-          'button, input[type="submit"], input[type="button"]',
+          'button, input[type="submit"], input[type="button"], a',
         ),
       ).find((b) => {
         const t =
@@ -263,7 +278,10 @@ async function pickAutoSelection(
       if (!continueBtn) {
         return { ok: false, error: "Continue button not found" };
       }
-      continueBtn.click();
+      // Defer the actual click to the Node side so we can (a) give the page a
+      // tick to enable Continue after the selection change fired, and (b) await
+      // the navigation it triggers and retry if it doesn't advance.
+      continueBtn.setAttribute("data-autolien-continue", "1");
       return {
         ok: true,
         pickedBy,
@@ -281,7 +299,27 @@ async function pickAutoSelection(
     throw err;
   }
 
-  await page.waitForLoadState("domcontentloaded", { timeout: STEP_TIMEOUT_MS });
+  // Click Continue on the Node side so we can await the navigation it triggers.
+  const clickContinue = async (): Promise<void> => {
+    const btn = await page.$('[data-autolien-continue="1"]');
+    if (!btn) return;
+    await Promise.all([
+      page.waitForLoadState("domcontentloaded", { timeout: STEP_TIMEOUT_MS }),
+      btn.click(),
+    ]);
+  };
+  // Let State Farm's onchange handler prime Continue before the first click.
+  await page.waitForTimeout(300);
+  await clickContinue();
+
+  // Continue occasionally no-ops until the selection registers — if the page
+  // hasn't left Auto Selection, retry the click once.
+  let settled = await waitForPageState(page, { away: "auto-selection" });
+  if (settled === "auto-selection") {
+    await page.waitForTimeout(400);
+    await clickContinue();
+    settled = await waitForPageState(page, { away: "auto-selection" });
+  }
   return { picked: result.pickedBy, rowText: result.rowText };
 }
 
