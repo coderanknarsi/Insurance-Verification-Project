@@ -66,6 +66,18 @@ async function captureScreenshot(
   page: Page,
   label: string,
 ): Promise<string | null> {
+  // Headful Chrome does not paint a fully background/occluded tab, so there is
+  // no frame for EITHER the CDP capture or Playwright's `page.screenshot` to
+  // grab — both previously hung their full timeouts (~14s wasted) on the
+  // dedicated verification tab. Bringing the tab to the foreground forces a
+  // paint so the capture returns promptly. This is the operator's own managed
+  // Chrome, so momentarily focusing the verification tab is harmless.
+  await withTimeout(
+    page.bringToFront(),
+    2_000,
+    `Screenshot ${label} bringToFront`,
+  ).catch(() => undefined);
+
   try {
     const client = await withTimeout(
       page.context().newCDPSession(page),
@@ -77,12 +89,6 @@ async function captureScreenshot(
         client.send("Page.captureScreenshot", {
           format: "png",
           captureBeyondViewport: false,
-          // The verification page is a dedicated, usually-occluded background
-          // tab. With the default `fromSurface: true`, headful Chrome waits for
-          // a compositor frame that an occluded tab never produces, so the
-          // capture hung the full timeout before falling back. `false` reads
-          // straight from the renderer and returns immediately for hidden tabs.
-          fromSurface: false,
         }),
         6_000,
         `Screenshot ${label} CDP capture`,
@@ -99,7 +105,7 @@ async function captureScreenshot(
       const buf = await page.screenshot({
         fullPage: false,
         type: "png",
-        timeout: 8_000,
+        timeout: 6_000,
         animations: "disabled",
         caret: "hide",
       });
